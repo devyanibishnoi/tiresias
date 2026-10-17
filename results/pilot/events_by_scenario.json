@@ -1,0 +1,10 @@
+{
+  "S0_moderate": [],
+  "S1_moderate": [
+    {
+      "window": 60,
+      "kind": "onset",
+      "drift_type": "sudden"
+    }
+  ]
+}

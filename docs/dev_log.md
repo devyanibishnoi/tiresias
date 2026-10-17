@@ -81,3 +81,10 @@ report's Challenges Faced section.
   and `configs/main.yaml` updated accordingly.
 - `docs/first_pass_prediction.md` (10 to 12 numeric predictions with ranges and reasoning) written
   and committed before the pilot or main run, per PRD Section 10.2. Phase 3 is done.
+- Phase 4 pilot run (S0, S1 moderate, 5 seeds, strategies B0/B1/M1, `configs/pilot.yaml`) completed
+  in about 193 seconds. Results in `results/pilot/`. Early signal: M1 detected moderate covariate
+  drift with 0 windows of label-free delay on every pilot seed (backstop needed a median of 8.5),
+  and matched B1's time-averaged recall within about 1.3 percent relative while retraining about
+  1.6 times on average against B1's fixed 6. Consistent with predictions 1, 8 and 9 in
+  `docs/first_pass_prediction.md`, though 5 seeds and one scenario is not enough to call it a
+  result. Phase 4 is done.

@@ -18,6 +18,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np  # noqa: F401 (used below and by cmd_tune's grid)
 
+import yaml
+
 from telltale.config import FEATURE_NAMES, StreamConfig
 from telltale.data.events_io import save_events
 from telltale.data.injector import VALID_SCENARIOS, scenario_events
@@ -181,6 +183,62 @@ def cmd_tune(_args: argparse.Namespace) -> None:
     )
 
 
+def cmd_run(args: argparse.Namespace) -> None:
+    from telltale.experiments import build_grid, run_grid, save_raw
+    from telltale.summarize import save_summary, summarize
+
+    with open(args.config) as f:
+        config = yaml.safe_load(f)
+
+    cfg = StreamConfig()
+    name = config["name"]
+    s1_all_severities = "s1_severity" not in config
+    specs = build_grid(config["scenarios"], config["seeds"], config["strategies"], s1_all_severities=s1_all_severities)
+
+    print(f"running {name}: {len(specs)} (scenario, severity, seed, strategy) combinations")
+    out = run_grid(specs)
+    print(f"done in {out['wall_seconds']:.1f}s")
+
+    out_dir = RESULTS_DIR if name == "main" else RESULTS_DIR / name
+    save_raw(out, out_dir=out_dir)
+
+    summary = summarize(out["window_log"], out["events_by_scenario"], cfg=cfg)
+    summary_path = out_dir / "summary.json"
+    save_summary(summary, summary_path)
+    print(f"wrote {summary_path}")
+
+    if name == "pilot":
+        _make_pilot_figure(out["window_log"], out_dir)
+
+
+def _make_pilot_figure(window_log, out_dir: Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    s1 = window_log[(window_log["scenario"] == "S1") & (window_log["strategy"].isin(["B0", "B1", "M1"]))]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for strategy, g in s1.groupby("strategy"):
+        mean_by_t = g.groupby("t")["ap"].mean()
+        ax.plot(mean_by_t.index, mean_by_t.values, label=strategy)
+
+    m1 = s1[s1["strategy"] == "M1"]
+    alarm_t = m1[m1["alarm_label_free"]]["t"].unique()
+    retrain_t = m1[m1["retrain_executed"]]["t"].unique()
+    for t in alarm_t:
+        ax.axvline(t, color="orange", alpha=0.3, linestyle="--")
+    for t in retrain_t:
+        ax.axvline(t, color="green", alpha=0.4, linestyle="-")
+
+    ax.set_xlabel("window")
+    ax.set_ylabel("average precision (mean over pilot seeds)")
+    ax.set_title("Pilot: S1 moderate, performance over time (M1 alarms=orange, retrains=green)")
+    ax.legend()
+    fig.tight_layout()
+    out_path = out_dir / "pilot_performance_over_time.png"
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+    print(f"wrote {out_path}")
+
+
 def _not_implemented(name: str):
     def _run(_args: argparse.Namespace) -> None:
         print(f"telltale.cli {name}: not implemented yet (see PRD.md Section 12 for the build plan)")
@@ -198,7 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_parser = sub.add_parser("run")
     run_parser.add_argument("--config", required=True)
-    run_parser.set_defaults(func=_not_implemented("run"))
+    run_parser.set_defaults(func=cmd_run)
 
     sub.add_parser("profile").set_defaults(func=_not_implemented("profile"))
     sub.add_parser("make-figures").set_defaults(func=_not_implemented("make-figures"))

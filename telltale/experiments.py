@@ -53,10 +53,18 @@ class RunSpec:
     strategy: str
 
 
-def build_grid(scenarios: list[str], seeds: list[int], strategies: list[str] = P0_STRATEGIES) -> list[RunSpec]:
+def build_grid(
+    scenarios: list[str],
+    seeds: list[int],
+    strategies: list[str] = P0_STRATEGIES,
+    s1_all_severities: bool = True,
+) -> list[RunSpec]:
     specs = []
     for scenario in scenarios:
-        severities = S1_SEVERITIES if scenario == "S1" else ["moderate"]
+        if scenario == "S1" and s1_all_severities:
+            severities = S1_SEVERITIES
+        else:
+            severities = ["moderate"]
         for severity in severities:
             for seed in seeds:
                 for strategy in strategies:
