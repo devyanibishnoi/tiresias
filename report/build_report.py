@@ -33,13 +33,17 @@ SECTIONS_DIR = ROOT / "docs" / "report_sections"
 RESULTS_DIR = ROOT / "results"
 FIGURE_DIR = RESULTS_DIR / "figures"
 
-AUTHORS = [
-    ("Devyani Bishnoi", "24BCI0167"),
-    ("Anshika Agarwal", "24BCE0989"),
-    ("Hridya Sharma", "24BAI0182"),
-]
 TITLE = "Label-Free Drift Detection and Selective Retraining Framework for Deployed Fraud Classifiers Under Delayed Ground Truth"
-REPORT_DATE = "October 17, 2026"
+
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from report_identity import AUTHORS, REPORT_DATE
+except ImportError:
+    # report/report_identity.py is gitignored (real names and registration
+    # numbers, not meant for a public portfolio repo); a fresh clone without
+    # it still builds, just with placeholders on the cover page instead.
+    AUTHORS = [("[AUTHOR NAME]", "[REG NO]")]
+    REPORT_DATE = "[REPORT DATE]"
 
 
 def set_paragraph_text(p: Paragraph, text: str) -> None:

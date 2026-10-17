@@ -17,3 +17,4 @@ data/raw/
 /report/template.docx
 /report/out/
 /docs/report_sections/
+/report/report_identity.py
