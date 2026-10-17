@@ -25,17 +25,17 @@ from docx.text.paragraph import Paragraph
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from telltale.config import StreamConfig
+from tiresias.config import StreamConfig
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = ROOT / "report" / "template.docx"
-OUT_DOCX = ROOT / "report" / "out" / "telltale_report.docx"
+OUT_DOCX = ROOT / "report" / "out" / "tiresias_report.docx"
 SECTIONS_DIR = ROOT / "docs" / "report_sections"
 RESULTS_DIR = ROOT / "results"
 FIGURE_DIR = RESULTS_DIR / "figures"
 
 TITLE = "Label-Free Drift Detection and Selective Retraining Framework for Deployed Fraud Classifiers Under Delayed Ground Truth"
-SHORT_TITLE = "telltale: Label-Free Drift Detection for Fraud Classifiers"
+SHORT_TITLE = "Tiresias: Label-Free Drift Detection for Fraud Classifiers"
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -643,7 +643,7 @@ def build() -> None:
     sketches_idx = find_paragraph(doc, "3.1 Concept", style_prefix="Heading")
     anchor = doc.paragraphs[sketches_idx]
     anchor = add_picture_after(anchor, doc, FIGURE_DIR / "architecture_diagram.png", width_inches=6.0)
-    anchor = add_paragraph_after(anchor, doc, "Figure 1. telltale architecture.")
+    anchor = add_paragraph_after(anchor, doc, "Figure 1. Tiresias architecture.")
     anchor = add_picture_after(anchor, doc, FIGURE_DIR / "label_delay_timeline.png", width_inches=6.0)
     anchor = add_paragraph_after(anchor, doc, "Figure 2. Label-delay timeline, one drift event (pilot).")
     anchor = add_picture_after(anchor, doc, FIGURE_DIR / "drift_taxonomy.png", width_inches=6.0)
@@ -708,7 +708,7 @@ def build() -> None:
     md_13_2 = ""
     md_14_1_2 = ""
     if results_ready:
-        from telltale.summarize import judge_hypotheses
+        from tiresias.summarize import judge_hypotheses
 
         with open(summary_path) as f:
             summary = json.load(f)

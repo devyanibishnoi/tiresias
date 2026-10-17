@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from telltale.monitors.stats import ks_statistic, psi
+from tiresias.monitors.stats import ks_statistic, psi
 
 RNG = np.random.default_rng(0)
 

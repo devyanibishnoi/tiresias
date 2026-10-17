@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from telltale.data.label_vault import LabelVault, LeakageError
+from tiresias.data.label_vault import LabelVault, LeakageError
 
 
 def test_matured_label_is_readable():

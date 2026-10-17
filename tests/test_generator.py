@@ -6,12 +6,12 @@ import numpy as np
 import pytest
 from sklearn.metrics import average_precision_score
 
-from telltale.config import StreamConfig
-from telltale.data.events_io import load_events, save_events
-from telltale.data.injector import scenario_events
-from telltale.data.stream import generate_stream
-from telltale.models import fit_model
-from telltale.monitors.stats import psi
+from tiresias.config import StreamConfig
+from tiresias.data.events_io import load_events, save_events
+from tiresias.data.injector import scenario_events
+from tiresias.data.stream import generate_stream
+from tiresias.models import fit_model
+from tiresias.monitors.stats import psi
 
 CFG = StreamConfig()
 TUNING_SEEDS = CFG.tuning_seeds

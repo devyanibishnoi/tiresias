@@ -1,6 +1,6 @@
 # Main config (PRD Section 9 item 2, Section 12 Phase 5). All P0 scenarios, S1 at all three
 # severities, all P0 strategies of Section 7. Consumed by
-# `python -m telltale.cli run --config configs/main.yaml`.
+# `python -m tiresias.cli run --config configs/main.yaml`.
 #
 # Evaluation seeds cut from the PRD default of 20 to 10 (PRD Section 3 cut list item 1),
 # confirmed with the author; see docs/decisions.md for the wall-clock reasoning. Tuning seeds

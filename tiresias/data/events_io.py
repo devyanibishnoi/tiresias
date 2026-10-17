@@ -6,7 +6,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from telltale.data.injector import DriftEvent
+from tiresias.data.injector import DriftEvent
 
 
 def save_events(path: str | Path, events: list[DriftEvent]) -> None:

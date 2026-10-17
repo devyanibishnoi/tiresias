@@ -15,12 +15,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from telltale.config import StreamConfig
-from telltale.data.stream import generate_stream
-from telltale.metrics import ALERT_BUDGET
-from telltale.models import fit_model
-from telltale.monitors.combiner import build_reference, compute_window_evidence
-from telltale.monitors.cusum import CUSUM
+from tiresias.config import StreamConfig
+from tiresias.data.stream import generate_stream
+from tiresias.metrics import ALERT_BUDGET
+from tiresias.models import fit_model
+from tiresias.monitors.combiner import build_reference, compute_window_evidence
+from tiresias.monitors.cusum import CUSUM
 
 
 @dataclass

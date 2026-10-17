@@ -20,14 +20,14 @@ import numpy as np  # noqa: F401 (used below and by cmd_tune's grid)
 
 import yaml
 
-from telltale.config import FEATURE_NAMES, StreamConfig
-from telltale.data.events_io import save_events
-from telltale.data.injector import VALID_SCENARIOS, scenario_events
-from telltale.data.stream import generate_stream
-from telltale.metrics import recall_at_budget
-from telltale.models import fit_model
-from telltale.monitors.backstop import backstop_evidence, calibrate_backstop
-from telltale.tuning import compute_evidence_stream, false_alarm_rate_per_100, grid_search
+from tiresias.config import FEATURE_NAMES, StreamConfig
+from tiresias.data.events_io import save_events
+from tiresias.data.injector import VALID_SCENARIOS, scenario_events
+from tiresias.data.stream import generate_stream
+from tiresias.metrics import recall_at_budget
+from tiresias.models import fit_model
+from tiresias.monitors.backstop import backstop_evidence, calibrate_backstop
+from tiresias.tuning import compute_evidence_stream, false_alarm_rate_per_100, grid_search
 
 RESULTS_DIR = Path("results")
 
@@ -178,14 +178,14 @@ def cmd_tune(_args: argparse.Namespace) -> None:
     print(f"wrote {out_path}")
     print(json.dumps(result, indent=2))
     print(
-        "\nUpdate telltale/simulator.py's TUNED_CUSUM_* / TUNED_BACKSTOP_* constants "
+        "\nUpdate tiresias/simulator.py's TUNED_CUSUM_* / TUNED_BACKSTOP_* constants "
         "if these differ from what is currently hardcoded there."
     )
 
 
 def cmd_run(args: argparse.Namespace) -> None:
-    from telltale.experiments import build_grid, run_grid, save_raw
-    from telltale.summarize import save_summary, summarize
+    from tiresias.experiments import build_grid, run_grid, save_raw
+    from tiresias.summarize import save_summary, summarize
 
     with open(args.config) as f:
         config = yaml.safe_load(f)
@@ -242,7 +242,7 @@ def _make_pilot_figure(window_log, out_dir: Path) -> None:
 def cmd_profile(_args: argparse.Namespace) -> None:
     from dataclasses import asdict
 
-    from telltale.profiling import run_profile
+    from tiresias.profiling import run_profile
 
     result = run_profile()
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -269,7 +269,7 @@ def cmd_profile(_args: argparse.Namespace) -> None:
 def cmd_make_figures(_args: argparse.Namespace) -> None:
     import pandas as pd
 
-    from telltale.figures import (
+    from tiresias.figures import (
         make_ablation_bars,
         make_architecture_diagram,
         make_detection_delay_vs_severity,
@@ -332,14 +332,14 @@ def cmd_real_check(_args: argparse.Namespace) -> None:
 
 def _not_implemented(name: str):
     def _run(_args: argparse.Namespace) -> None:
-        print(f"telltale.cli {name}: not implemented yet (see PRD.md Section 12 for the build plan)")
+        print(f"tiresias.cli {name}: not implemented yet (see PRD.md Section 12 for the build plan)")
         sys.exit(1)
 
     return _run
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m telltale.cli")
+    parser = argparse.ArgumentParser(prog="python -m tiresias.cli")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("generate-samples").set_defaults(func=cmd_generate_samples)

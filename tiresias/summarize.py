@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
 
-from telltale.config import StreamConfig
+from tiresias.config import StreamConfig
 
 NO_DRIFT_SCENARIOS = {"S0", "S6"}
 

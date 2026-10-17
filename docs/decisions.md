@@ -117,3 +117,9 @@ Dated log of design and parameter choices, with reasons. Append only.
   configurations x 20 seeds) was projected at roughly 3 to 3.5 hours even with parallel workers.
   10 seeds brings that to roughly 1.5 to 1.75 hours. `telltale/experiments.py` still runs with a
   small worker pool (`DEFAULT_MAX_WORKERS = 3`) since even a ~2x speedup is worth taking.
+
+- Project renamed `telltale` to `tiresias` (author's request, no longer a course-only deliverable).
+  Code paths stay lowercase (`tiresias/`, `tiresias.cli`); report and README prose use the
+  capitalized proper noun "Tiresias". See `docs/dev_log.md` for the mechanics. Decision entries
+  above this one keep their original `telltale/...` path references unchanged, since they are an
+  accurate record of what the paths were called when each decision was made.

@@ -1,6 +1,6 @@
-# Tuning config (PRD Section 12 Phase 3). Consumed by `python -m telltale.cli tune`.
-# Tuning seeds and the false-alarm safety target are also hardcoded in telltale/cli.py's
-# cmd_tune and telltale/config.py's StreamConfig.tuning_seeds; this file documents the same
+# Tuning config (PRD Section 12 Phase 3). Consumed by `python -m tiresias.cli tune`.
+# Tuning seeds and the false-alarm safety target are also hardcoded in tiresias/cli.py's
+# cmd_tune and tiresias/config.py's StreamConfig.tuning_seeds; this file documents the same
 # values for a human reader, it is not re-parsed by the CLI.
 
 tuning_seeds: [100, 101, 102, 103, 104]

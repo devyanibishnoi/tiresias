@@ -72,7 +72,7 @@ model corrected for it. Each strategy has a different exposure path:
     compute seconds ~= retrain_count x (measured seconds per retrain)
                       + (number of windows) x (measured seconds per monitored window)
 
-Both measured constants come from `telltale.cli profile` (Section 9 item 7, Section 13 component
+Both measured constants come from `tiresias.cli profile` (Section 9 item 7, Section 13 component
 sheet), not from this document.
 
 ## Status

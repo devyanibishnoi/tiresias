@@ -1,4 +1,4 @@
-from telltale.monitors.cusum import CUSUM
+from tiresias.monitors.cusum import CUSUM
 
 
 def test_no_alarm_under_slack():

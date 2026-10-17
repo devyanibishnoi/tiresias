@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from telltale.models import Retrainer, fit_model, out_of_fold_scores
+from tiresias.models import Retrainer, fit_model, out_of_fold_scores
 
 
 def test_out_of_fold_scores_differ_from_in_sample():

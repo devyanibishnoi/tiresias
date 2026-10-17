@@ -9,7 +9,7 @@ the training windows) scoring the held-out calibration windows is already
 honest out-of-sample, so no extra cross-validation is needed there. After a
 retrain, the new reference is built from the same matured windows the model
 was just refit on, which does need the blocked out-of-fold scores from
-telltale.models.Retrainer (PRD 6.6): using the retrained model's own
+tiresias.models.Retrainer (PRD 6.6): using the retrained model's own
 in-sample predictions on its own training window would be overconfident and
 would flag drift immediately after every retrain even with none present.
 """
@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from telltale.monitors.calibration import (
+from tiresias.monitors.calibration import (
     N_NULL_DRAWS,
     SignalThresholds,
     bootstrap_window_index_matrix,
@@ -28,15 +28,15 @@ from telltale.monitors.calibration import (
     ratio_null_draws,
     threshold_from_null,
 )
-from telltale.monitors.input_drift import (
+from tiresias.monitors.input_drift import (
     FeatureBins,
     InputDriftResult,
     input_drift_null_draws,
     input_drift_value_fast,
     prepare_input_drift_reference,
 )
-from telltale.monitors.score_drift import log_odds, operating_threshold, predictive_entropy, score_drift_raw
-from telltale.monitors.stats import prepare_bins
+from tiresias.monitors.score_drift import log_odds, operating_threshold, predictive_entropy, score_drift_raw
+from tiresias.monitors.stats import prepare_bins
 
 SIGNAL_NAMES = ["input_drift", "psi_log_odds", "alert_ratio", "entropy_ratio"]
 

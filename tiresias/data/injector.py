@@ -4,7 +4,7 @@ Each scenario is a pure function of the window index t. It returns the
 feature-mean shift (covariate drift), the amount seasonality scale (benign
 seasonality) and which informative-feature set and weights generate the
 label (concept drift). The simulator applies these to the generator in
-telltale/data/generator.py. Ground truth event times are produced alongside
+tiresias/data/generator.py. Ground truth event times are produced alongside
 so detection delay can be computed exactly without touching the model.
 """
 
@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from telltale.config import (
+from tiresias.config import (
     COVARIATE_DRIFT_FEATURES,
     COVARIATE_DRIFT_NOISE_STD,
     COVARIATE_SHIFT_DIRECTION,

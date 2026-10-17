@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from telltale.metrics import average_precision, recall_at_budget
+from tiresias.metrics import average_precision, recall_at_budget
 
 
 def test_recall_at_budget_perfect_ranking():

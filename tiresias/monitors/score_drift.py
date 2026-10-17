@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from telltale.monitors.stats import psi, psi_fast
+from tiresias.monitors.stats import psi, psi_fast
 
 EPS = 1e-6
 
@@ -48,7 +48,7 @@ def score_drift_raw(
     log_odds_bins: tuple | None = None,
 ) -> ScoreDriftRaw:
     """log_odds_bins, if given, is the (edges, ref_frac) pair precomputed
-    once per reference by telltale.monitors.stats.prepare_bins, avoiding a
+    once per reference by tiresias.monitors.stats.prepare_bins, avoiding a
     quantile recomputation on every window."""
     if log_odds_bins is not None:
         edges, ref_frac = log_odds_bins

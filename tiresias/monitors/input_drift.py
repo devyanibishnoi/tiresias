@@ -17,8 +17,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from telltale.monitors.calibration import psi_null_draws
-from telltale.monitors.stats import ks_statistic, prepare_bins, psi, psi_fast
+from tiresias.monitors.calibration import psi_null_draws
+from tiresias.monitors.stats import ks_statistic, prepare_bins, psi, psi_fast
 
 N_TOP_FEATURES = 5
 

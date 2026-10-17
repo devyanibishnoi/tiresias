@@ -4,7 +4,7 @@ timeline (built from the pilot run). Data-dependent figures (performance
 over time on the full main run, detection delay vs severity, retrain count
 vs recall, ablation bars, false alarm rates, the S4 failure figure,
 sensitivity, scale-up) are built once `results/summary.json` exists; see
-`telltale/cli.py`'s `cmd_make_figures` for what still needs to be added
+`tiresias/cli.py`'s `cmd_make_figures` for what still needs to be added
 there once the main run completes.
 """
 
@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from telltale.config import StreamConfig
+from tiresias.config import StreamConfig
 
 
 def _box(ax, xy, w, h, text, fc="#dbe7f3"):
@@ -37,7 +37,7 @@ def make_architecture_diagram(out_path: Path) -> None:
     ax.set_xlim(0, 10)
     ax.set_ylim(0, 10)
     ax.axis("off")
-    ax.set_title("telltale architecture", fontsize=11)
+    ax.set_title("Tiresias architecture", fontsize=11)
 
     _box(ax, (0.3, 8.6), 2.0, 0.9, "Stream source\n+ drift injector\n(scenario S0-S7)")
     _box(ax, (3.0, 8.6), 2.0, 0.9, "Window t\nfeatures X_t\nlabels y_t (hidden)")

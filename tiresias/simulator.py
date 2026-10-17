@@ -14,16 +14,16 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from telltale.config import StreamConfig
-from telltale.data.injector import DriftEvent
-from telltale.data.label_vault import LabelVault
-from telltale.data.stream import generate_stream
-from telltale.metrics import ALERT_BUDGET, average_precision, recall_at_budget
-from telltale.models import Retrainer, fit_model
-from telltale.monitors.backstop import backstop_evidence, calibrate_backstop
-from telltale.monitors.combiner import build_reference, compute_window_evidence
-from telltale.monitors.cusum import CUSUM
-from telltale.policies import STRATEGIES, StrategyConfig
+from tiresias.config import StreamConfig
+from tiresias.data.injector import DriftEvent
+from tiresias.data.label_vault import LabelVault
+from tiresias.data.stream import generate_stream
+from tiresias.metrics import ALERT_BUDGET, average_precision, recall_at_budget
+from tiresias.models import Retrainer, fit_model
+from tiresias.monitors.backstop import backstop_evidence, calibrate_backstop
+from tiresias.monitors.combiner import build_reference, compute_window_evidence
+from tiresias.monitors.cusum import CUSUM
+from tiresias.policies import STRATEGIES, StrategyConfig
 
 
 @dataclass

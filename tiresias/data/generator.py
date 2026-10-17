@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from telltale.config import (
+from tiresias.config import (
     N_CATEGORICAL,
     N_CONTINUOUS,
     N_CYCLIC,

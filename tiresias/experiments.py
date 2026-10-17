@@ -33,9 +33,9 @@ def _limit_worker_threads() -> None:
     for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
         os.environ[var] = "1"
 
-from telltale.config import StreamConfig
-from telltale.policies import STRATEGIES
-from telltale.simulator import simulate
+from tiresias.config import StreamConfig
+from tiresias.policies import STRATEGIES
+from tiresias.simulator import simulate
 
 RESULTS_DIR = Path("results")
 

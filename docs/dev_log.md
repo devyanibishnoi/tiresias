@@ -233,3 +233,13 @@ report's Challenges Faced section.
   1.6 times on average against B1's fixed 6. Consistent with predictions 1, 8 and 9 in
   `docs/first_pass_prediction.md`, though 5 seeds and one scenario is not enough to call it a
   result. Phase 4 is done.
+- Project renamed from `telltale` to `tiresias` (package directory via `git mv`, all imports and
+  CLI references via a blanket find-and-sed over every `.py` file, then every doc, config and
+  report-section markdown file by hand to get the capitalization right: lowercase `tiresias` stays
+  in code paths and CLI commands, capitalized "Tiresias" is used in report/README prose as the
+  proper noun). Regenerated `results/figures/architecture_diagram.png` (the old figure had the
+  previous lowercase name baked into its title as raster text) and rebuilt the full report to
+  `report/out/tiresias_report.docx`. Full test suite (38 tests) re-run and passing after the
+  rename. Past entries above this one, and in `docs/decisions.md`, keep their original `telltale/`
+  path references as an accurate historical record of what the paths were called at the time; they
+  were not retroactively rewritten.

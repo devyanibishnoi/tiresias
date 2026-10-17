@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from telltale.metrics import recall_at_budget
+from tiresias.metrics import recall_at_budget
 
 
 @dataclass

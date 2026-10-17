@@ -7,8 +7,8 @@ label delay) is untouched since those are the behaviour under test.
 
 from dataclasses import replace
 
-from telltale.config import StreamConfig
-from telltale.simulator import simulate
+from tiresias.config import StreamConfig
+from tiresias.simulator import simulate
 
 FAST_CFG = replace(StreamConfig(), N=300)
 

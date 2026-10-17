@@ -1,6 +1,6 @@
 """Drift injector event-time correctness, PRD Section 15.1 item 3."""
 
-from telltale.data.injector import scenario_events, scenario_window_params
+from tiresias.data.injector import scenario_events, scenario_window_params
 
 
 def test_s0_has_no_events():

@@ -10,9 +10,9 @@ from functools import lru_cache
 
 import numpy as np
 
-from telltale.config import INFORMATIVE_SET_A, INFORMATIVE_SET_B, StreamConfig, WEIGHTS_A, WEIGHTS_B
-from telltale.data.generator import calibrate_intercept, fraud_logit, make_window_features, sigmoid
-from telltale.data.injector import DriftEvent, scenario_events, scenario_window_params
+from tiresias.config import INFORMATIVE_SET_A, INFORMATIVE_SET_B, StreamConfig, WEIGHTS_A, WEIGHTS_B
+from tiresias.data.generator import calibrate_intercept, fraud_logit, make_window_features, sigmoid
+from tiresias.data.injector import DriftEvent, scenario_events, scenario_window_params
 
 _CALIBRATION_SEED = 999999
 

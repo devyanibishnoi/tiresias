@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from telltale.monitors.stats import bin_edges, digitize, psi_from_fractions
+from tiresias.monitors.stats import bin_edges, digitize, psi_from_fractions
 
 N_NULL_DRAWS = 300
 NULL_PERCENTILE = 99

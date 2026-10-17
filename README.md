@@ -1,10 +1,10 @@
-# telltale
+# Tiresias
 
 Label-free drift detection and selective retraining for deployed fraud classifiers under delayed
 ground truth.
 
 A deployed fraud classifier degrades as fraud patterns shift, but the true labels needed to see
-that directly are delayed, often by days to weeks, through disputes and chargebacks. telltale
+that directly are delayed, often by days to weeks, through disputes and chargebacks. Tiresias
 watches the live stream of transactions and the model's own scores (both available instantly, no
 label needed), raises an early alarm when the evidence of drift is strong and persistent, and
 defers the retrain until enough post-alarm labels have matured. A slower, delayed-label backstop
@@ -21,13 +21,13 @@ python -m venv .venv
 source .venv/bin/activate       (Linux/Mac)
 pip install -r requirements.txt
 pytest -q
-python -m telltale.cli generate-samples
-python -m telltale.cli tune
-python -m telltale.cli run --config configs/pilot.yaml
-python -m telltale.cli run --config configs/main.yaml
-python -m telltale.cli profile
-python -m telltale.cli make-figures
-python -m telltale.cli real-check
+python -m tiresias.cli generate-samples
+python -m tiresias.cli tune
+python -m tiresias.cli run --config configs/pilot.yaml
+python -m tiresias.cli run --config configs/main.yaml
+python -m tiresias.cli profile
+python -m tiresias.cli make-figures
+python -m tiresias.cli real-check
 python report/build_report.py
 ```
 
@@ -37,7 +37,7 @@ version-specific workarounds that were needed).
 ## Results
 
 Full main run: 10 evaluation seeds, 8 scenarios (S1 at three severities), 8 strategies, built into
-`report/out/telltale_report.docx` and `results/summary.json`. Headline numbers:
+`report/out/tiresias_report.docx` and `results/summary.json`. Headline numbers:
 
 - Label-free detection on moderate sudden covariate drift: median 0 windows of delay, against the
   delayed-label backstop's median 9 (paired Wilcoxon, p = 0.002). The same direction held across
@@ -69,7 +69,8 @@ a paired test across those 10 seeds, but a larger seed count would narrow the co
 
 ## Why the name
 
-A telltale is a small signal that reveals something hidden, like the ribbons tied to a sailboat's
-rigging that show how the wind is really flowing even when the sail itself looks fine. The
-label-free signals in this project are the same idea applied to a fraud model: they reveal that
-something underneath has shifted well before any confirmed label could prove it.
+Tiresias was the blind prophet of Greek myth: unable to see the present, he could still foresee
+what was coming. The label-free monitor in this project works the same way. It never sees the
+ground truth of whether a transaction was fraud, the labels arrive late, if at all, yet it still
+has to foresee that the model underneath is drifting, early enough to act before the damage shows
+up in confirmed outcomes.
