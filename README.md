@@ -36,9 +36,22 @@ version-specific workarounds that were needed).
 
 ## Results
 
-See `results/pilot/pilot_performance_over_time.png` for an early look (5 pilot seeds) and
-`results/figures/` for the full main-run figures once `configs/main.yaml` has been run. Headline
-numbers and which hypotheses (H1 to H5) held are in the report, Section 14.2.
+Full main run: 10 evaluation seeds, 8 scenarios (S1 at three severities), 8 strategies, built into
+`report/out/telltale_report.docx` and `results/summary.json`. Headline numbers:
+
+- Label-free detection on moderate sudden covariate drift: median 0 windows of delay, against the
+  delayed-label backstop's median 9 (paired Wilcoxon, p = 0.002). The same direction held across
+  every covariate-drift scenario tested (H1, supported).
+- The full framework used about 39 percent of a fixed retraining schedule's mean retrain count
+  while keeping time-averaged recall within about 2 percent (relative) of it (H3, supported).
+- On pure concept drift (S4), the label-free monitor correctly failed to detect the true onset in
+  7 of 10 seeds; the backstop caught it at a median of 7 windows in every seed (H4, supported).
+- False alarm rate (H5) held for the input-only signal, the backstop alone, and the label-free-only
+  strategy, but the full combined framework and the score-only variant exceeded the 1-per-100
+  target slightly (1.08 per 100 on the no-drift control): a genuine negative finding, investigated
+  and reported honestly in the report's Section 13 and 14, not hidden.
+
+See `results/figures/` for all plots, `results/pilot/` for the earlier 5-seed pilot run.
 
 ## Limitations
 
