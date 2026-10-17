@@ -37,7 +37,7 @@ def make_architecture_diagram(out_path: Path) -> None:
     ax.set_xlim(0, 10)
     ax.set_ylim(0, 10)
     ax.axis("off")
-    ax.set_title("telltale architecture (PRD Section 4.1)", fontsize=11)
+    ax.set_title("telltale architecture", fontsize=11)
 
     _box(ax, (0.3, 8.6), 2.0, 0.9, "Stream source\n+ drift injector\n(scenario S0-S7)")
     _box(ax, (3.0, 8.6), 2.0, 0.9, "Window t\nfeatures X_t\nlabels y_t (hidden)")
@@ -93,7 +93,7 @@ def make_drift_taxonomy(out_path: Path) -> None:
     axes[0].set_ylabel("input drift magnitude\n(S4: label-function change instead)")
     axes[3].text(50, 1.1, "marginals flat:\nonly P(y|x) moves", fontsize=7, ha="center", color="#d62728")
 
-    fig.suptitle("Drift taxonomy: what changes and when (PRD Figure 3)")
+    fig.suptitle("Drift taxonomy: what changes and when")
     fig.tight_layout()
     fig.savefig(out_path, dpi=130)
     plt.close(fig)
@@ -207,7 +207,7 @@ def make_ablation_bars(summary: dict, scenario: str, severity: str, out_path: Pa
 
     bars1 = axes[1].bar(labels, fas, color="#dd8452")
     axes[1].bar_label(bars1, fmt="%.2f")
-    axes[1].axhline(1.0, color="red", linestyle="--", lw=1, label="PRD target (1/100)")
+    axes[1].axhline(1.0, color="red", linestyle="--", lw=1, label="target (1/100)")
     axes[1].set_ylabel("false alarms per 100 windows (S0/S6 mean)")
     axes[1].set_title("False alarm rate")
     axes[1].set_ylim(0, max(fas + [1.0]) * 1.3)
@@ -230,7 +230,7 @@ def make_false_alarm_rates(summary: dict, out_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.bar(x - 0.2, s0_rates, width=0.4, label="S0")
     ax.bar(x + 0.2, s6_rates, width=0.4, label="S6")
-    ax.axhline(1.0, color="red", linestyle="--", lw=1, label="PRD target (1/100)")
+    ax.axhline(1.0, color="red", linestyle="--", lw=1, label="target (1/100)")
     ax.set_xticks(x)
     ax.set_xticklabels(strategies)
     ax.set_ylabel("alarms per 100 windows")

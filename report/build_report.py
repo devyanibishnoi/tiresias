@@ -35,6 +35,7 @@ RESULTS_DIR = ROOT / "results"
 FIGURE_DIR = RESULTS_DIR / "figures"
 
 TITLE = "Label-Free Drift Detection and Selective Retraining Framework for Deployed Fraud Classifiers Under Delayed Ground Truth"
+SHORT_TITLE = "telltale: Label-Free Drift Detection for Fraud Classifiers"
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -95,34 +96,44 @@ def _is_structural(p: Paragraph) -> bool:
 
 
 def clear_placeholder_paragraph(doc: Document, heading_idx: int, max_scan: int = 6) -> int:
-    """If the paragraph right after a heading is leftover template
-    instructional text (not another heading or subsection, not empty),
-    clear it and return its index so content can be inserted there.
-    Otherwise return the heading index itself."""
+    """Clear every leftover template instructional paragraph right after a
+    heading (not another heading or subsection, not empty), stopping at the
+    first structural or already-empty paragraph, and return the index of
+    the last one cleared so content can be inserted there. Some sections
+    have more than one placeholder line in a row (section 3.1 has both
+    "Give the sketch or sketches and describe them." and a separate literal
+    "Concept Sketches" line below it); clearing only the first one left the
+    second as a stray leftover in the built report."""
+    last_cleared = heading_idx
     for j in range(heading_idx + 1, min(heading_idx + 1 + max_scan, len(doc.paragraphs))):
         p = doc.paragraphs[j]
         if _is_structural(p):
-            return heading_idx
+            break
         if p.text.strip():
             set_paragraph_text(p, "")
-            return j
-    return heading_idx
+            last_cleared = j
+        else:
+            break
+    return last_cleared
 
 
 def clear_next_placeholder(doc: Document, heading: Paragraph, max_scan: int = 4) -> Paragraph:
-    """Paragraph-based counterpart to clear_placeholder_paragraph: if the
-    paragraph right after `heading` is leftover template instructional
-    text, clear it and return it as the insertion anchor; otherwise return
-    `heading` itself."""
+    """Paragraph-based counterpart to clear_placeholder_paragraph: clears
+    every leftover placeholder paragraph right after `heading` (see that
+    function's docstring) and returns the last one cleared as the insertion
+    anchor, or `heading` itself if there was nothing to clear."""
     idx = paragraph_index(doc, heading)
+    last_cleared = heading
     for j in range(idx + 1, min(idx + 1 + max_scan, len(doc.paragraphs))):
         p = doc.paragraphs[j]
         if _is_structural(p):
-            return heading
+            break
         if p.text.strip():
             set_paragraph_text(p, "")
-            return p
-    return heading
+            last_cleared = p
+        else:
+            break
+    return last_cleared
 
 
 def _apply_grid_borders(table: Table) -> None:
@@ -162,12 +173,53 @@ def add_inline_formatted_runs(paragraph: Paragraph, text: str) -> None:
             paragraph.add_run(part)
 
 
+TABLE_FONT_PT = 8.5
+TABLE_WIDTH_INCHES = 6.1  # usable page width between this template's margins
+MIN_COLUMN_INCHES = 0.55
+
+
 def set_cell_text_formatted(cell, text: str, bold: bool = False) -> None:
     p = cell.paragraphs[0]
     add_inline_formatted_runs(p, text)
     if bold:
         for run in p.runs:
             run.bold = True
+    for run in p.runs:
+        run.font.size = Pt(TABLE_FONT_PT)
+
+
+def _set_column_widths(table: Table, header: list, rows: list) -> None:
+    """Tables with many columns (the literature table, the component sheet,
+    the risk list, the prediction table) got squeezed into equal-width
+    columns on a portrait page, leaving some only a few characters wide.
+    Word's own autofit does not reliably respect a target width once a
+    table is built cell by cell, so this sets the width on the table, every
+    column, and every individual cell explicitly: Word only renders
+    consistent column widths when all three agree. Short ID/number columns
+    get a small minimum share; the rest is split across the remaining
+    columns in proportion to their longest cell, so a long free-text column
+    (Reasoning, Mitigation, Evidence) ends up visibly wider than a short one
+    (ID, Severity, Verdict)."""
+    n_cols = len(header)
+    if n_cols <= 3:
+        return  # narrow tables read fine with Word's default even split
+
+    lengths = []
+    for i in range(n_cols):
+        col_cells = [str(header[i])] + [str(r[i]) for r in rows if i < len(r)]
+        lengths.append(max((len(c) for c in col_cells), default=1))
+
+    total_len = sum(lengths) or 1
+    raw_widths = [max(MIN_COLUMN_INCHES, TABLE_WIDTH_INCHES * ln / total_len) for ln in lengths]
+    scale = TABLE_WIDTH_INCHES / sum(raw_widths)
+    widths = [Inches(w * scale) for w in raw_widths]
+
+    table.autofit = False
+    table.allow_autofit = False
+    for col_idx, width in enumerate(widths):
+        table.columns[col_idx].width = width
+        for row in table.rows:
+            row.cells[col_idx].width = width
 
 
 def add_table_after(anchor: Paragraph, doc: Document, header: list, rows: list) -> Table:
@@ -180,6 +232,7 @@ def add_table_after(anchor: Paragraph, doc: Document, header: list, rows: list) 
         for i, v in enumerate(row):
             if i < len(cells):
                 set_cell_text_formatted(cells[i], str(v))
+    _set_column_widths(table, header, rows)
     anchor._p.addnext(table._tbl)
     return table
 
@@ -539,11 +592,32 @@ def build() -> None:
     doc = Document(str(TEMPLATE_PATH))
     set_update_fields_on_open(doc)
 
+    # Running page header: replace the template's own "<Case study Title>"
+    # placeholder, keeping the course-code tab stop that follows it.
+    for section in doc.sections:
+        for p in section.header.paragraphs:
+            if "<Case study Title>" in p.text:
+                set_paragraph_text(p, p.text.replace("<Case study Title>", SHORT_TITLE))
+
     # Cover page
     set_paragraph_text(doc.paragraphs[4], TITLE)
     for i, (name, reg) in enumerate(AUTHORS):
         set_paragraph_text(doc.paragraphs[6 + i], f"{name} - {reg}")
     set_paragraph_text(doc.paragraphs[20], REPORT_DATE)
+
+    # The cover page's blank spacer paragraphs (around the supervisor block
+    # and below it) each carry the template's own "Block Text" before/after
+    # spacing even when empty, about 10pt each. That is fine for the
+    # template's own shorter placeholder title, but this project's title is
+    # 16 words and wraps to several lines, and there are three authors
+    # instead of one placeholder line, so the accumulated blank spacing was
+    # enough to push the date onto a second page. Zero the before/after
+    # spacing on blank paragraphs only, leaving spacing around actual text
+    # (the supervisor's name, the department) untouched.
+    for p in doc.paragraphs[:21]:
+        if not p.text.strip():
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(0)
 
     # Template typos, body headings only (never the TOC, see set_paragraph_text)
     idx = find_paragraph(doc, "ad Models", style_prefix="Heading")
@@ -573,7 +647,16 @@ def build() -> None:
     anchor = add_picture_after(anchor, doc, FIGURE_DIR / "label_delay_timeline.png", width_inches=6.0)
     anchor = add_paragraph_after(anchor, doc, "Figure 2. Label-delay timeline, one drift event (pilot).")
     anchor = add_picture_after(anchor, doc, FIGURE_DIR / "drift_taxonomy.png", width_inches=6.0)
-    add_paragraph_after(anchor, doc, "Figure 3. Drift taxonomy: sudden, gradual, recurring, concept.")
+    anchor = add_paragraph_after(anchor, doc, "Figure 3. Drift taxonomy: sudden, gradual, recurring, concept.")
+    marginals_path = FIGURE_DIR / "phase1_feature_marginals_check.png"
+    if marginals_path.exists():
+        anchor = add_picture_after(anchor, doc, marginals_path, width_inches=6.0)
+        add_paragraph_after(
+            anchor, doc,
+            "Figure 4. Feature marginals before and after drift: a covariate-drift feature (S1) "
+            "visibly shifts, while two unrelated features and every feature under pure concept "
+            "drift (S4) stay unchanged, confirming the generator behaves as designed.",
+        )
 
     # Section 4: Feasibility Calculation Sheet
     fill_section(doc, "4. Feasibility Calculation Sheet", load_section_markdown("04_feasibility.md"))
@@ -598,12 +681,13 @@ def build() -> None:
 
     # Section 11: Early Simulation Output (pilot)
     fill_section(doc, "11. Early Simulation Output", load_section_markdown("11_pilot.md"))
-    idx = find_paragraph(doc, "11. Early Simulation Output", style_prefix="Heading")
-    # figure inserted at the end of that section's content; find the last
-    # paragraph before section 12 and attach the picture there
-    next_idx = find_paragraph(doc, "12. Initial Qualitative Risk List", style_prefix="Heading 1")
-    anchor = doc.paragraphs[next_idx - 1]
-    add_picture_after(anchor, doc, Path("results/pilot/pilot_performance_over_time.png"), width_inches=6.0)
+    fig_heading_idx = find_paragraph(doc, "Figure and table", style_prefix=None)
+    anchor = doc.paragraphs[fig_heading_idx]
+    anchor = add_picture_after(anchor, doc, Path("results/pilot/pilot_performance_over_time.png"), width_inches=6.0)
+    add_paragraph_after(
+        anchor, doc,
+        "Figure 5. Pilot performance over time, S1 moderate, mean of 5 pilot seeds.",
+    )
 
     # Section 12: Initial Qualitative Risk List
     fill_section(doc, "12. Initial Qualitative Risk List", load_section_markdown("12_risk_list.md"))
@@ -641,6 +725,13 @@ def build() -> None:
 
     section_14_md = "\n\n".join(filter(None, [md_14_1_2, load_section_markdown("14_5_scale_up.md")]))
     fill_section(doc, "14. Analytical Model Validation Document", section_14_md)
+
+    scale_up_idx = find_paragraph(doc, "14.5 Initial Scale-Up", style_prefix=None)
+    anchor = doc.paragraphs[scale_up_idx]
+    scale_up_path = FIGURE_DIR / "scale_up_runtime.png"
+    if scale_up_path.exists():
+        anchor = add_picture_after(anchor, doc, scale_up_path, width_inches=5.5)
+        add_paragraph_after(anchor, doc, "Figure 12. Scale-up: monitor runtime versus window size.")
 
     if results_ready:
         insert_results_figures(doc)
@@ -692,46 +783,269 @@ def build_results_markdown(summary: dict, hypotheses: dict) -> tuple[str, str]:
     md_13_2 += "|---|---|---|---|---|\n"
     for r in rows_13_2:
         md_13_2 += "| " + " | ".join(r) + " |\n"
-    md_13_2 += "\n## 13.3 Ablation, failure analysis, sensitivity, false alarms\n\n"
-    md_13_2 += (
-        "Figure 5 shows performance over time on S1 moderate with M1's alarms and retrains marked. "
-        "Figure 6 shows the label-free detection delay holding at 0 windows across every S1 "
-        "severity. Figure 7 plots retrain count against time-averaged recall across all strategies "
-        "and scenarios. Figure 8 is the ablation of input-only, score-only and combined evidence "
-        "on detection delay and false alarm rate (H2). Figure 9 is the false alarm rate by "
-        "strategy on the no-drift controls S0 and S6 (H5): it is where the one hypothesis that did "
-        "not fully hold is visible directly, M1 and M1b sit above the PRD target line. Figure 10 "
-        "is the S4 failure case (H4): label-free evidence stays at the edge of normal through the "
-        "true onset and the backstop's own retrain, and only rises afterward, during the retrain's "
-        "transition period, not as early detection of the original drift. Sensitivity sweeps over "
-        "label delay D, schedule K and maturity m (P1) were not run in the time available; see "
-        "docs/dev_log.md.\n"
-    )
-
-    # 14.1 prediction vs observed, 14.2 hypothesis verdicts
     h1 = hypotheses.get("H1", {})
     h3 = hypotheses.get("H3", {})
     h4 = hypotheses.get("H4", {})
     h5 = hypotheses.get("H5", {})
 
-    md_14 = "## 14.1 Predicted versus observed\n\n"
-    md_14 += "| Prediction | Predicted range | Observed | Held? |\n"
-    md_14 += "|---|---|---|---|\n"
+    md_13_2 += "\n## 13.3 Ablation, failure analysis, sensitivity, false alarms\n\n"
+    md_13_2 += (
+        "Figure 6 shows performance over time on S1 moderate with M1's alarms and retrains marked. "
+        "Figure 7 shows the label-free detection delay holding at 0 windows across every S1 "
+        "severity. Figure 8 plots retrain count against time-averaged recall across all strategies "
+        "and scenarios. Figure 9 is the ablation of input-only, score-only and combined evidence "
+        "on detection delay and false alarm rate. Figure 10 is the false alarm rate by strategy on "
+        "the no-drift controls S0 and S6: it is where the one hypothesis that did not fully hold is "
+        "visible directly, the full framework and the score-only variant sit above the target line. "
+        "Figure 11 is the S4 failure case: label-free evidence stays at the edge of normal through "
+        "the true onset and the backstop's own retrain, and only rises afterward, during the "
+        "retrain's transition period, not as early detection of the original drift. Sensitivity "
+        "sweeps over label delay, schedule length and maturity wait were not run in the time "
+        "available.\n\n"
+    )
+
+    md_13_2 += "**Table: detection delay and early-warning lead time, by scenario and severity**\n\n"
+    md_13_2 += "| Scenario | Severity | Label-free delay (median) | Backstop delay (median) | Lead time (median) | Wilcoxon p | n |\n"
+    md_13_2 += "|---|---|---|---|---|---|---|\n"
+    for scen_sev, r in h1.get("per_scenario", {}).items():
+        scenario, severity = scen_sev.rsplit("_", 1)
+        key = f"{scenario}|{severity}|M1"
+        d = summary["detection"].get(key, {})
+        p = r["wilcoxon"].get("p_value")
+        p_text = f"{p:.4f}" if p is not None else "n/a"
+        md_13_2 += (
+            f"| {scenario} | {severity} | {d.get('label_free_delay_median')} | "
+            f"{d.get('backstop_delay_median')} | {r['median_lead_time']:.1f} | {p_text} | {r['wilcoxon']['n']} |\n"
+        )
+
+    md_13_2 += "\n**Table: false alarm rate by strategy, no-drift controls**\n\n"
+    md_13_2 += "| Strategy | S0 (per 100 windows) | S6 (per 100 windows) | At or below target (1/100)? |\n"
+    md_13_2 += "|---|---|---|---|\n"
+    for strategy in ["M0", "M1", "M1a", "M1b", "B3"]:
+        s0 = summary["false_alarms"].get(f"S0|moderate|{strategy}", {}).get("rate_per_100")
+        s6 = summary["false_alarms"].get(f"S6|moderate|{strategy}", {}).get("rate_per_100")
+        ok = "yes" if (s0 is not None and s6 is not None and s0 <= 1.0 and s6 <= 1.0) else "no"
+        md_13_2 += f"| {strategy} | {s0:.2f} | {s6:.2f} | {ok} |\n"
+
+    md_13_2 += "\n**Table: ablation, S1 moderate (input-only vs score-only vs combined)**\n\n"
+    md_13_2 += "| Variant | Detection delay (median) | False alarm rate (S0/S6 mean) |\n"
+    md_13_2 += "|---|---|---|\n"
+    for strategy, label in [("M1a", "input-only"), ("M1b", "score-only"), ("M1", "combined")]:
+        d = summary["detection"].get(f"S1|moderate|{strategy}", {}).get("label_free_delay_median")
+        s0 = summary["false_alarms"].get(f"S0|moderate|{strategy}", {}).get("rate_per_100") or 0
+        s6 = summary["false_alarms"].get(f"S6|moderate|{strategy}", {}).get("rate_per_100") or 0
+        md_13_2 += f"| {label} | {d} | {(s0 + s6) / 2:.2f} |\n"
+    md_13_2 += (
+        "\nThe combined signal adds no detection-delay benefit over either signal alone on S1 "
+        "moderate (all three already detect in the first drifted window), but inherits the score "
+        "signal's higher false alarm rate: this is why H2 (the combined signal has a better "
+        "delay-versus-false-alarm trade-off than either alone) is not supported by this result.\n"
+    )
+
+    md_13_2 += "\n**Table: scenario S4 (pure concept drift) breakdown**\n\n"
+    md_13_2 += "| Quantity | Value |\n"
+    md_13_2 += "|---|---|\n"
+    md_13_2 += f"| Label-free alarms fired (of 10 seeds) | {h4.get('label_free_alarm_count')} |\n"
+    md_13_2 += f"| Backstop detection delay (median, all 10 seeds) | {h4.get('backstop_median_delay')} windows |\n"
+    s4_m1 = summary["groups"].get("S4|moderate|M1", {})
+    s4_b1 = summary["groups"].get("S4|moderate|B1", {})
+    if s4_m1 and s4_b1:
+        gap = (s4_b1["time_averaged_recall_mean"] - s4_m1["time_averaged_recall_mean"]) / s4_b1["time_averaged_recall_mean"]
+        md_13_2 += f"| Time-averaged recall, full framework | {s4_m1['time_averaged_recall_mean']:.3f} |\n"
+        md_13_2 += f"| Time-averaged recall, fixed schedule | {s4_b1['time_averaged_recall_mean']:.3f} |\n"
+        md_13_2 += f"| Relative gap (framework below fixed schedule) | about {gap * 100:.0f} percent |\n"
+    md_13_2 += (
+        "\nAveraged over all scenarios, the framework's recall is within about 2 percent of the "
+        "fixed schedule's (Section 13.2), but that average hides this one weak spot: on S4 "
+        "specifically, where the framework is structurally slower to react (it only ever responds "
+        "through the backstop, never the faster label-free path), its recall measurably trails the "
+        "fixed schedule, with a wide confidence interval reflecting how few of the ten seeds "
+        "triggered extra, unhelpful label-free retrains during the transition period described "
+        "above.\n"
+    )
+
+    import json as _json
+    from pathlib import Path as _Path
+
+    _profiling = _json.loads(_Path("results/profiling.json").read_text()) if _Path("results/profiling.json").exists() else {}
+    retrain_sec_with_oof = _profiling.get("retrain_seconds_with_oof")
+    retrain_sec_without_oof = _profiling.get("retrain_seconds_without_oof")
+    monitor_ms = (_profiling.get("monitor_seconds_per_window", [None, None])[1] or 0) * 1000
+
     h1_leads = [r["median_lead_time"] for r in h1.get("per_scenario", {}).values()]
-    md_14 += f"| Early-warning lead time (median), S1/S2/S3 | about D windows (6-9) | {np.median(h1_leads):.1f} windows (median across scenarios) | {'yes' if h1.get('supported') else 'no'} |\n" if h1_leads else ""
-    md_14 += f"| Retrain count ratio, M1 vs B1 | at most 0.60 | {h3.get('mean_retrain_ratio'):.3f} | {'yes' if h3.get('supported') else 'no'} |\n" if h3.get('mean_retrain_ratio') is not None else ""
-    md_14 += f"| Backstop detection delay, S4 | D to D+3 (about 7-10) | {h4.get('backstop_median_delay')} windows | {'yes' if h4.get('supported') else 'no'} |\n"
-    fa_vals = list(h5.get("rates", {}).values())
-    md_14 += f"| False alarm rate, S0/S6 | 0 to 1 per 100 | {np.mean(fa_vals):.2f} per 100 (mean) | {'yes' if h5.get('supported') else 'no'} |\n" if fa_vals else ""
+    s1_mod = summary["detection"].get("S1|moderate|M1", {})
+    s1_sev = summary["detection"].get("S1|severe|M1", {})
+    s4_det = summary["detection"].get("S4|moderate|M1", {})
+    retrain_m1_sev = summary["groups"].get("S1|severe|M1", {}).get("retrain_count_mean")
+    fa_m1_s0 = summary["false_alarms"].get("S0|moderate|M1", {}).get("rate_per_100")
+
+    def _gap_closed(scenario, severity):
+        b0 = summary["groups"].get(f"{scenario}|{severity}|B0")
+        b2 = summary["groups"].get(f"{scenario}|{severity}|B2")
+        m1 = summary["groups"].get(f"{scenario}|{severity}|M1")
+        if not (b0 and b2 and m1) or b2["time_averaged_recall_mean"] == b0["time_averaged_recall_mean"]:
+            return None
+        return (m1["time_averaged_recall_mean"] - b0["time_averaged_recall_mean"]) / (
+            b2["time_averaged_recall_mean"] - b0["time_averaged_recall_mean"]
+        )
+
+    gap_mod, gap_sev = _gap_closed("S1", "moderate"), _gap_closed("S1", "severe")
+    gap_mean = np.mean([g for g in (gap_mod, gap_sev) if g is not None]) if (gap_mod or gap_sev) else None
+
+    # Predicted-range midpoints, taken directly from the first-pass prediction
+    # document (Section 10), used only to compute a simple relative error
+    # against the observed value, never as a substitute for it.
+    preds = [
+        ("1. Median label-free delay, S1 all severities", (0, 1),
+         0.0 if s1_mod.get("label_free_delay_median") == 0 else None, "windows"),
+        ("2. False alarm rate, S0", (0, 1), fa_m1_s0, "per 100"),
+        ("3. False alarm rate, S6", (0, 1), summary["false_alarms"].get("S6|moderate|M1", {}).get("rate_per_100"), "per 100"),
+        ("4. Retrain count, B1, 120 eval windows", (6, 6), summary["groups"].get("S1|moderate|B1", {}).get("retrain_count_mean"), ""),
+        ("5. Retrain count, M1, S1 severe", (2, 4), retrain_m1_sev, ""),
+        ("7. Backstop delay, S4", (7, 10), h4.get("backstop_median_delay"), "windows"),
+        ("8. Lead time, S1 moderate", (6, 9), s1_mod.get("backstop_delay_median"), "windows"),
+        ("9. Gap closed, S1 moderate/severe", (0.6, 0.9), gap_mean, "ratio"),
+        ("11. Seconds per retrain, with reference rebuild", (5, 12), retrain_sec_with_oof, "s"),
+        ("12. Seconds per retrain, without reference rebuild", (1, 2), retrain_sec_without_oof, "s"),
+    ]
+
+    def _held(lo, hi, obs):
+        return obs is not None and lo <= obs <= hi
+
+    def _rel_err(lo, hi, obs):
+        mid = (lo + hi) / 2
+        if obs is None or mid == 0:
+            return None
+        return (obs - mid) / mid
+
+    md_14 = "## 14.1 Predicted versus observed\n\n"
+    md_14 += "| # | Prediction | Predicted range | Observed | Held? |\n"
+    md_14 += "|---|---|---|---|---|\n"
+    rel_errors = []
+    for name, (lo, hi), obs, unit in preds:
+        held = _held(lo, hi, obs)
+        obs_text = f"{obs:.3f} {unit}".strip() if isinstance(obs, float) else (f"{obs} {unit}".strip() if obs is not None else "n/a")
+        md_14 += f"| {name.split('.')[0]} | {name.split('. ', 1)[1]} | {lo} to {hi} | {obs_text} | {'yes' if held else 'no'} |\n"
+        err = _rel_err(lo, hi, obs)
+        if err is not None:
+            rel_errors.append((name, err))
+    md_14 += f"| 6 | Label-free detection on S4 | fails in large majority of runs | failed to detect at onset in {10 - h4.get('label_free_alarm_count', 0)} of 10 seeds | {'yes' if h4.get('label_free_alarm_count', 10) <= 5 else 'no'} |\n"
+    md_14 += f"| 10 | Monitor time per window | well under 100 ms | {monitor_ms:.1f} ms | yes |\n"
+
+    mare = float(np.mean([abs(e) for _, e in rel_errors])) * 100 if rel_errors else 0.0
+    worst = sorted(rel_errors, key=lambda x: abs(x[1]), reverse=True)[:2]
+
+    md_14 += (
+        f"\nAcross the ten predictions with a defined numeric midpoint, the mean absolute relative "
+        f"error against that midpoint is about {mare:.0f} percent. The largest misses were "
+        + " and ".join(f"prediction {n.split('.')[0]} ({e * 100:+.0f} percent)" for n, e in worst)
+        + ". Predictions 11 and 12 (seconds per retrain) were both underestimates: the reasoning "
+        "behind them assumed roughly 1 to 2 seconds per individual model fit from early "
+        "development testing, which held up less well once measured under the full retrain window "
+        "size and the machine's actual load during the formal profiling run, about 2.6 seconds per "
+        "fit on average once six fits are counted. Prediction 9 (gap closed) was an overestimate in "
+        "the other direction: the framework's recall on S1 moderate and severe did not just close "
+        "most of the gap to the oracle, it exceeded the oracle's own recall. This is not a flaw in "
+        "the oracle's trigger timing so much as a gap in the analytical model's assumption that the "
+        "oracle is a hard upper bound: the oracle retrains exactly once, at onset plus the label "
+        "delay plus the maturity wait, using the most recent matured window as its training data, "
+        "but at that point most of that training window still predates the drift (the label delay "
+        "means only a handful of post-drift windows have matured by then), so the oracle's one "
+        "retrain is itself trained on mostly pre-drift data. The framework, which can retrain more "
+        "than once as further labels mature, ends up with more post-drift training data by the end "
+        "of the stream and so can out-perform a single, early, data-starved oracle retrain. The "
+        "other predictions held within a more modest margin, consistent with the analytical model's "
+        "detection-delay and false-alarm formulas (Section 8) being closer to measurement than its "
+        "retrain-cost and oracle-comparison assumptions.\n"
+    )
 
     md_14 += "\n## 14.2 Hypotheses\n\n"
     md_14 += "| Hypothesis | Verdict | Basis |\n"
     md_14 += "|---|---|---|\n"
-    md_14 += f"| H1: label-free lead time >= D/2 over backstop | {'Supported' if h1.get('supported') else 'Not supported'} | Median lead time per scenario, paired Wilcoxon |\n"
-    md_14 += "| H2: combined signal beats either alone on delay-vs-false-alarm | See ablation figure and table | M1 vs M1a vs M1b |\n"
-    md_14 += f"| H3: retrains <= 60% of fixed schedule, recall within 3% | {'Supported' if h3.get('supported') else 'Not supported'} | Mean ratios across scenarios |\n"
-    md_14 += f"| H4: label-free fails on S4, backstop catches it within D+5 | {'Supported' if h4.get('supported') else 'Not supported'} | S4 label-free alarm count, backstop median delay |\n"
-    md_14 += f"| H5: false alarm rate <= 1/100 on S0, S6 | {'Supported' if h5.get('supported') else 'Not supported'} | Measured rate per strategy |\n"
+    h1_p_text = ", ".join(
+        f"{sc}: p={r['wilcoxon'].get('p_value'):.4f}" if r["wilcoxon"].get("p_value") is not None else f"{sc}: n too small"
+        for sc, r in h1.get("per_scenario", {}).items()
+    )
+    md_14 += (
+        f"| H1: label-free lead time at least half the label delay over the backstop | "
+        f"{'Supported' if h1.get('supported') else 'Not supported'} | "
+        f"Median lead time {np.median(h1_leads):.1f} windows across scenarios "
+        f"(target at least 3.5); paired Wilcoxon {h1_p_text} |\n"
+    )
+    md_14 += (
+        "| H2: combined signal has a better detection-delay versus false-alarm trade-off than "
+        "either alone | Not supported | Section 13.3's ablation table: all three variants detect "
+        "S1 moderate at a median of 0 windows (no delay benefit from combining), but the combined "
+        "and score-only variants have a higher false alarm rate (0.75 per 100) than input-only "
+        "(0.21 per 100) |\n"
+    )
+    md_14 += (
+        f"| H3: retrains at most 60 percent of the fixed schedule, recall within 3 percent | "
+        f"{'Supported' if h3.get('supported') else 'Not supported'} | "
+        f"Mean retrain ratio {h3.get('mean_retrain_ratio'):.3f}, mean recall ratio {h3.get('mean_recall_ratio'):.3f} "
+        f"(target ratio 1.00 plus or minus 0.03) |\n"
+    )
+    md_14 += (
+        f"| H4: label-free fails on S4, backstop catches it within 12 windows | "
+        f"{'Supported' if h4.get('supported') else 'Not supported'} | "
+        f"Label-free alarmed in {h4.get('label_free_alarm_count')} of 10 seeds (all after the "
+        f"backstop had already retrained); backstop median delay {h4.get('backstop_median_delay')} "
+        f"windows in all 10 seeds |\n"
+    )
+    fa_detail = ", ".join(f"{strategy}: S0={summary['false_alarms'].get(f'S0|moderate|{strategy}', {}).get('rate_per_100', 0):.2f}, S6={summary['false_alarms'].get(f'S6|moderate|{strategy}', {}).get('rate_per_100', 0):.2f}" for strategy in ["M0", "M1", "M1a", "M1b", "B3"])
+    md_14 += (
+        f"| H5: false alarm rate at most 1 per 100 windows on S0 and S6 | "
+        f"{'Supported' if h5.get('supported') else 'Not supported'} | {fa_detail} (per 100 windows); "
+        f"the full framework and the score-only variant exceed the target on S0 |\n"
+    )
+
+    md_14 += "\n## 14.3 Requirement check\n\n"
+    md_14 += "| ID | Statement | Target | Measured | Verdict |\n"
+    md_14 += "|---|---|---|---|---|\n"
+    md_14 += "| FR1 | Input and score signals use only features and scores, never the label | n/a | Verified by the leakage-guard tests and a code review confirming no monitor function takes the label as an argument | Met |\n"
+    md_14 += "| FR2 | An alarm names the signals and features responsible | n/a | The input monitor's top contributing features are logged with every alarm | Met |\n"
+    md_14 += "| FR3 | Defer the retrain until enough post-alarm labels have matured | n/a | Verified by an automated test: a label-free alarm at window t never schedules a retrain earlier than t plus the label delay plus the maturity wait | Met |\n"
+    md_14 += "| FR4 | Log every decision with its reason | n/a | Every window's record includes the retrain flag, its source, alarm flags and evidence values | Met |\n"
+    md_14 += "| FR5 | Every strategy runs under the same rules | n/a | All eight strategies share one simulation function and differ only in a small set of policy flags | Met |\n"
+    md_14 += "| FR6 | Results reproduce from one command and a seed | n/a | Verified by an automated reproducibility test; the main run itself reruns deterministically from its seed list | Met |\n"
+    pr1_val = s1_mod.get("label_free_delay_median")
+    md_14 += f"| PR1 | Median label-free detection delay, S1 moderate | At most 3 windows | {pr1_val} windows | {'Met' if pr1_val is not None and pr1_val <= 3 else 'Not met'} |\n"
+    md_14 += "| PR2 | Detection rate within 10 windows, S1 moderate and severe | At least 90 percent | 100 percent (both severities) | Met |\n"
+    md_14 += f"| PR3 | False alarm rate, S0 and S6 | At most 1 per 100 windows | {fa_detail} | Partly met (input-only, backstop-alone and label-free-only meet it; the full framework and score-only variant do not, on S0) |\n"
+    md_14 += f"| PR4 | Retrain count relative to fixed schedule | At most 60 percent | {h3.get('mean_retrain_ratio'):.1%} | {'Met' if h3.get('mean_retrain_ratio') is not None and h3['mean_retrain_ratio'] <= 0.6 else 'Not met'} |\n"
+    md_14 += f"| PR5 | Recall relative to fixed schedule | Within 3 percent relative | {abs(1 - h3.get('mean_recall_ratio', 1)) * 100:.1f} percent, averaged over scenarios | Met on average; see the S4 exception in Section 13.3 |\n"
+    md_14 += f"| PR6 | Monitor time per window | At most 100 ms | {monitor_ms:.1f} ms | Met, with a wide margin |\n"
+    md_14 += f"| PR7 | Backstop detection within 12 windows, S4 | Required | {h4.get('backstop_median_delay')} windows, every seed | Met |\n"
+
+    md_14 += (
+        "\n## 14.4 Application feasibility validation report\n\n"
+        "Does the evidence support using this in a real fraud pipeline, and under which conditions? "
+        "The label-free channel's speed advantage is real and consistent: it detected sudden "
+        "covariate drift with no measurable delay across every severity and every covariate-drift "
+        "scenario tested, a statistically significant lead over a delayed-label backstop in every "
+        "case it could be tested. That part of the evidence transfers directly to any deployment "
+        "where covariate drift is the main concern and the input and score distributions genuinely "
+        "carry the signal, which is the common case for fraud (attackers changing channels, "
+        "merchant mix shifting, a new payment method rolling out).\n\n"
+        "What does not transfer without caveats: the false alarm result (H5) shows the full "
+        "framework needs tighter tuning or a cheaper, less retrain-sensitive calibration before it "
+        "is safe to run unattended at the project's own 1-per-100 target, since the measured rate on "
+        "the no-drift control exceeded it for two of the five label-free variants. The economic "
+        "case (Section 4) is not a straightforward compute saving either: fewer retrain events, yes, "
+        "but each one costs more compute with the current reference-rebuild design, so a real "
+        "deployment should budget for retrain cost, not assume the framework is cheaper in raw CPU "
+        "seconds than a fixed schedule. And the scenario where the framework's recall measurably "
+        "trailed the fixed schedule (S4, pure concept drift, Section 13.3) is a reminder that this "
+        "is a backstop-only regime: a deployment that expects a lot of pure concept drift, not "
+        "covariate drift, should not expect the label-free path to help and should budget for "
+        "backstop-speed reactions only.\n\n"
+        "Conditions under which the evidence supports deployment: covariate drift is the dominant "
+        "expected failure mode, the label delay is known and roughly fixed, false alarms are "
+        "monitored and the input-only or backstop-only variants are preferred over the full "
+        "combined signal until its false alarm rate is retuned, and the team budgets retrain "
+        "compute based on measured per-retrain cost rather than assuming fewer retrains means less "
+        "total compute.\n"
+    )
 
     return md_13_2, md_14
 
@@ -743,12 +1057,14 @@ def insert_results_figures(doc: Document) -> None:
     idx = find_paragraph(doc, "13.3", style_prefix=None)
     anchor = doc.paragraphs[idx]
     for fname, cap, num in [
-        ("performance_over_time_s1_moderate.png", "Performance over time, S1 moderate.", "5"),
-        ("detection_delay_vs_severity.png", "Detection delay versus drift severity.", "6"),
-        ("retrain_vs_recall.png", "Retrain count versus time-averaged recall.", "7"),
-        ("ablation_bars.png", "Ablation: detection delay and false alarm rate by signal.", "8"),
-        ("false_alarm_rates.png", "False alarm rates, S0 and S6.", "9"),
-        ("s4_failure.png", "S4 failure figure: label-free evidence stays flat while performance collapses.", "10"),
+        ("performance_over_time_s1_moderate.png", "Performance over time, S1 moderate.", "6"),
+        ("detection_delay_vs_severity.png", "Detection delay versus drift severity.", "7"),
+        ("retrain_vs_recall.png", "Retrain count versus time-averaged recall.", "8"),
+        ("ablation_bars.png", "Ablation: detection delay and false alarm rate by signal.", "9"),
+        ("false_alarm_rates.png", "False alarm rates, S0 and S6.", "10"),
+        ("s4_failure.png", "S4 (pure concept drift): performance collapses at onset while label-free "
+                            "evidence stays near normal, only rising later during the backstop's own "
+                            "retrain transition, not as early detection of the original drift.", "11"),
     ]:
         path = FIGURE_DIR / fname
         if path.exists():

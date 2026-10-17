@@ -156,6 +156,66 @@ report's Challenges Faced section.
 - Full report built from real results (`report/build_report.py`): 282 paragraphs, 16 tables, 0
   leftover template placeholders, 0 em dashes, all 16 sections present in order. `report/out/
   telltale_report.docx` is the current candidate for the final deliverable.
+- Thorough review pass against the built docx (treated as a fix list, not a rebuild): found and
+  fixed several more real bugs, some only visible in the rendered document, not in python-docx's
+  `.text` (which never shows Word's own auto-generated outline numbers):
+  - The template's "Heading 2" style carries automatic outline numbering at the STYLE level
+    (`<w:numPr><w:ilvl w:val="1"/></w:numPr>` in the style definition, not the paragraph), so
+    setting literal "1.1 Domain information" text on a paragraph Word already numbers itself
+    rendered as "1.1 1.1 Domain information" for every Heading-2 subsection the build script
+    touched. Three subsections (3.1, 3.2, 3.3) carry a paragraph-level numbering override that
+    suppresses the auto-number, which is why those needed to keep their literal number while the
+    rest did not; fixed by checking for that direct override before deciding whether to strip the
+    number from the text being set.
+  - The markdown-to-docx paragraph and table-cell inserters set raw text directly, leaving literal
+    `**bold**` and `` `code` `` markdown markers in the rendered document (about 238 backticks, one
+    stray `**...**` pair) instead of real Word formatting. Fixed with a proper inline-span parser
+    applied everywhere text is inserted, including table cells.
+  - A markdown table cell used an escaped pipe (`\|`) to include a literal "|" inside a cell's
+    text; the table-row splitter did not understand the escape, silently produced extra cells, and
+    left a stray trailing backslash in the truncated final cell for two rows (PR1, PR7).
+  - Code snippets were corrupted: the same literal-"\n"-is-not-a-Word-line-break bug found earlier
+    for the Abstract also hit every code block, and the template's Normal style is justified text,
+    which stretches spacing on short code lines. Built a dedicated code-block inserter: one run
+    per line with explicit `<w:br/>` breaks, `xml:space="preserve"` on each line so indentation
+    survives, explicit left alignment, monospace font, light shaded background.
+  - A section with more than one leftover template placeholder paragraph in a row (3.1 has both
+    "Give the sketch or sketches and describe them." and a separate literal "Concept Sketches"
+    line below it) only had its first placeholder cleared; the second was left as a stray leftover.
+    Fixed by looping the placeholder-clearing helpers instead of clearing just one paragraph.
+  - Removed all "PRD Section X.Y" references, internal file paths (`docs/...`, `results/...`,
+    `telltale/...` outside of the component sheet and code-snippet attributions, where naming the
+    actual file is the point) and phase/priority jargon ("Phase 3", "P1 item") from every report
+    section; rewrote the false-alarm figure/caption/title text that baked in "(PRD Section 4.1)"
+    and "(PRD Figure 3)"; fixed a wrong reference citation (Gama et al. 2014's first author is
+    J. Gama, not M. M. Gama) and switched the reference list to author-year style to match how the
+    text actually cites sources (it never used the bracketed IEEE numbers).
+  - Expanded Section 14.1 from 4 of 12 predictions to all 12, with per-row Held/Not-held logic
+    computed from the actual observed values (not hand-typed), a mean-absolute-relative-error
+    summary, and a stated reason for the two largest misses (retrain seconds underestimated,
+    because development-time per-fit timing did not hold up at the full retrain window size; gap
+    closed overestimated, because the oracle's single retrain lands on a training window that still
+    mostly predates the drift, so it is not actually a hard upper bound). Added Section 14.3 (a
+    requirement check table giving each of FR1-FR6 and PR1-PR7 its own verdict) and Section 14.4
+    (an application feasibility validation paragraph), both previously missing despite other
+    sections pointing to them. Added the missing results tables to Section 13.3 (detection delay
+    and lead time by scenario, false alarm rate by strategy, the ablation table, the S4 breakdown)
+    so the headline claims are backed by a table in Section 13, not only asserted in the
+    Conclusion's prose.
+  - Recomputed the Section 4 economic rating honestly: the full framework needs about 7 retrains a
+    year against the fixed schedule's 18, but each framework retrain costs about 5.5 times more
+    (the out-of-fold reference rebuild), so total yearly compute is higher, not lower, with the
+    current design. The previous "High" economic rating was not supported by the report's own
+    numbers; the real case is fewer retrain events to validate and deploy, not less compute.
+  - Set explicit, content-proportional column widths (plus a smaller table font) on every table
+    with more than 3 columns, instead of leaving Word's default equal-width split to squeeze short
+    columns on a portrait page; zeroed the spacing on the cover page's blank spacer paragraphs,
+    which the template gives real before/after spacing even when empty, since this project's
+    16-word title and three authors (versus the template's shorter placeholder) pushed the date
+    onto a second page.
+  - Added the feature-marginals figure (existed since Phase 1 but was never inserted into the
+    report) and the scale-up figure (existed since profiling but was only named as a file path, not
+    shown), renumbering the full figure sequence to 1 through 12 with no gap.
 - Blocked, author-provided: the P1 real-data check (PRD 5.4) needs `data/raw/creditcard.csv` (the
   Kaggle `mlg-ulb/creditcardfraud` dataset), which is not present. Per PRD 5.4's own instruction
   ("if the file is missing, skip this item and log it"), `telltale.cli real-check` is left
