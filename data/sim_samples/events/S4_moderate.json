@@ -1,0 +1,9 @@
+[
+  {
+    "window": 60,
+    "kind": "onset",
+    "drift_type": "concept",
+    "scenario": "S4",
+    "severity": "moderate"
+  }
+]

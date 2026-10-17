@@ -1,0 +1,9 @@
+[
+  {
+    "window": 60,
+    "kind": "onset",
+    "drift_type": "sudden",
+    "scenario": "S1",
+    "severity": "mild"
+  }
+]

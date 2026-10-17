@@ -1,0 +1,16 @@
+[
+  {
+    "window": 60,
+    "kind": "onset",
+    "drift_type": "prevalence",
+    "scenario": "S7",
+    "severity": "moderate"
+  },
+  {
+    "window": 81,
+    "kind": "offset",
+    "drift_type": "prevalence",
+    "scenario": "S7",
+    "severity": "moderate"
+  }
+]

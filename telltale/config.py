@@ -1,6 +1,6 @@
 """Default stream and experiment parameters (PRD Section 5.1)."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -44,8 +44,29 @@ FEATURE_NAMES = (
 # the label changes.
 INFORMATIVE_SET_A = [0, 1, 2, 3, 4, 5]
 INFORMATIVE_SET_B = [6, 7, 8, 9, 10, 11]
-WEIGHTS_A = [0.9, -0.8, 0.7, 0.6, -0.5, 0.5]
-WEIGHTS_B = [0.85, -0.75, 0.65, -0.6, 0.55, -0.5]
+WEIGHTS_A = [2.85, -2.5, 2.2, 1.9, -1.6, 1.6]
+WEIGHTS_B = [2.7, -2.4, 2.05, -1.9, 1.75, -1.6]
 
-# Features whose marginal is shifted by covariate-drift scenarios (S1,S2,S3).
+# Features whose marginal is shifted by covariate-drift scenarios (S1, S2, S3).
+# The per-feature direction is chosen so that the shift is zero-sum against
+# WEIGHTS_A (sum of weight_i * direction_i over these four features is 0):
+# this is what makes it a pure covariate shift rather than a disguised
+# prevalence shift. The model still degrades because it was fit on data that
+# never covered this region of feature space, not because the ambient fraud
+# rate moved.
 COVARIATE_DRIFT_FEATURES = [0, 1, 2, 3]
+COVARIATE_SHIFT_DIRECTION = [1.0, 1.125, 1.0, -1.16667]
+
+SEVERITY_SIGMA = {"mild": 0.5, "moderate": 1.0, "severe": 2.0}
+
+# Idiosyncratic logit noise added under covariate drift (S1, S2, S3, S5), by
+# severity. Covariate drift moves the observed features into a region where
+# the realised label depends more on unobserved factors than the model's
+# training distribution assumed, which is what makes it hurt a correctly
+# specified ranking model instead of only shifting the decision threshold (or
+# the ambient fraud rate, which the shift direction is built to leave alone,
+# see COVARIATE_SHIFT_DIRECTION). Tuned on the tuning seeds against the
+# generator acceptance criteria of PRD Section 5.3 (see docs/decisions.md):
+# mild gives about 5 to 10 percent relative AP drop, moderate falls between
+# mild and severe, severe gives at least 25 percent.
+COVARIATE_DRIFT_NOISE_STD = {"mild": 0.44, "moderate": 0.85, "severe": 1.1}

@@ -1,0 +1,23 @@
+[
+  {
+    "window": 50,
+    "kind": "onset",
+    "drift_type": "recurring",
+    "scenario": "S3",
+    "severity": "moderate"
+  },
+  {
+    "window": 70,
+    "kind": "offset",
+    "drift_type": "recurring",
+    "scenario": "S3",
+    "severity": "moderate"
+  },
+  {
+    "window": 110,
+    "kind": "onset",
+    "drift_type": "recurring",
+    "scenario": "S3",
+    "severity": "moderate"
+  }
+]
