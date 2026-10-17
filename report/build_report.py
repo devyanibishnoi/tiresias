@@ -71,14 +71,25 @@ def find_paragraph(doc: Document, text: str, style_prefix: str | None = None, st
     raise ValueError(f"paragraph not found: {text!r}")
 
 
+def _is_structural(p: Paragraph) -> bool:
+    """True if `p` is itself a heading (numbered "N.N ..." text, or styled
+    Heading) rather than leftover instructional placeholder text: these
+    must never be blanked out by the placeholder-clearing helpers below,
+    which caused a real bug (clear_placeholder_paragraph blanked out the
+    template's own "6.1. Use Cases" line, mistaking it for the section's
+    placeholder text, since section 6 has no separate placeholder paragraph
+    between its Heading 1 and its first subsection)."""
+    return p.style.name.startswith("Heading") or bool(_SUBHEADING_NUMBER.match(p.text.strip()))
+
+
 def clear_placeholder_paragraph(doc: Document, heading_idx: int, max_scan: int = 6) -> int:
     """If the paragraph right after a heading is leftover template
-    instructional text (not another heading, not empty), clear it and
-    return its index so content can be inserted there. Otherwise return the
-    heading index itself (insert right after the heading)."""
+    instructional text (not another heading or subsection, not empty),
+    clear it and return its index so content can be inserted there.
+    Otherwise return the heading index itself."""
     for j in range(heading_idx + 1, min(heading_idx + 1 + max_scan, len(doc.paragraphs))):
         p = doc.paragraphs[j]
-        if p.style.name.startswith("Heading"):
+        if _is_structural(p):
             return heading_idx
         if p.text.strip():
             set_paragraph_text(p, "")
@@ -94,7 +105,7 @@ def clear_next_placeholder(doc: Document, heading: Paragraph, max_scan: int = 4)
     idx = paragraph_index(doc, heading)
     for j in range(idx + 1, min(idx + 1 + max_scan, len(doc.paragraphs))):
         p = doc.paragraphs[j]
-        if p.style.name.startswith("Heading") or _SUBHEADING_NUMBER.match(p.text.strip()):
+        if _is_structural(p):
             return heading
         if p.text.strip():
             set_paragraph_text(p, "")
@@ -182,16 +193,38 @@ def _find_existing_subheading(doc: Document, search_start: int, search_end: int,
     return None
 
 
-def insert_markdown_after(anchor, doc: Document, markdown_text: str, next_heading_idx: int | None = None):
-    """next_heading_idx: paragraph index of the NEXT top-level section
-    heading (or len(doc.paragraphs) if this is the last section), used as
-    the search boundary for matching existing template subheadings so a
-    subheading from a different, later section is never matched by
-    mistake."""
+def _find_existing_named_heading(doc: Document, search_start: int, search_end: int, heading_text: str) -> int | None:
+    """Fallback for subsections the template already gives a real Heading 2
+    with no leading number (e.g. "Domain Information", "Challenges Faced"),
+    matched by exact text rather than a "N.N" prefix."""
+    target = heading_text.strip().lower()
+    for i in range(search_start, min(search_end, len(doc.paragraphs))):
+        p = doc.paragraphs[i]
+        if p.style.name == "Heading 2" and p.text.strip().lower() == target:
+            return i
+    return None
+
+
+def insert_markdown_after(anchor, doc: Document, markdown_text: str, next_heading_text: str | None = None):
+    """next_heading_text: the NEXT top-level section's heading text (or
+    None if this is the last section), used as the search boundary for
+    matching existing template subheadings so a subheading from a later
+    section never gets matched by mistake. Re-resolved by text on every
+    lookup rather than cached as an index: each insertion earlier in the
+    section shifts every later paragraph's index, so a single index taken
+    up front goes stale after the first insertion and can end up excluding
+    the very paragraph being searched for."""
     lines = markdown_text.strip("\n").split("\n")
     i = 0
     last = anchor
-    search_end = next_heading_idx if next_heading_idx is not None else len(doc.paragraphs)
+
+    def current_search_end() -> int:
+        if next_heading_text is None:
+            return len(doc.paragraphs)
+        try:
+            return find_paragraph(doc, next_heading_text, style_prefix="Heading 1")
+        except ValueError:
+            return len(doc.paragraphs)
 
     while i < len(lines):
         line = lines[i]
@@ -209,9 +242,18 @@ def insert_markdown_after(anchor, doc: Document, markdown_text: str, next_headin
             heading_text = stripped.lstrip("#").strip()
             match = _SUBHEADING_NUMBER.match(heading_text)
             existing_idx = None
-            if match and isinstance(last, Paragraph):
+            if isinstance(last, Paragraph):
                 start_search = paragraph_index(doc, last) + 1
-                existing_idx = _find_existing_subheading(doc, start_search, search_end, match.group(1))
+                end = current_search_end()
+                if match:
+                    existing_idx = _find_existing_subheading(doc, start_search, end, match.group(1))
+                if existing_idx is None:
+                    # Either no numeric prefix at all ("Domain Information"),
+                    # or the template gives this subsection a plain Heading 2
+                    # with no matching numbered line (also "Domain
+                    # Information": the template has no "1.1" anywhere).
+                    name_only = _SUBHEADING_NUMBER.sub("", heading_text).strip()
+                    existing_idx = _find_existing_named_heading(doc, start_search, end, name_only)
             if existing_idx is not None:
                 existing_p = doc.paragraphs[existing_idx]
                 set_paragraph_text(existing_p, heading_text)
@@ -235,14 +277,27 @@ def insert_markdown_after(anchor, doc: Document, markdown_text: str, next_headin
             last = add_table_after(last, doc, header, rows)
             continue
 
-        if stripped.startswith("- ") or stripped.startswith("1. "):
-            bullet_lines = []
-            while i < len(lines) and (lines[i].strip().startswith("- ") or re.match(r"^\d+\.\s", lines[i].strip())):
-                bullet_lines.append(lines[i].strip())
+        if stripped.startswith("- ") or re.match(r"^\d+\.\s", stripped):
+            # Each list item may be soft-wrapped across several physical
+            # lines in the source .md; a continuation line is anything that
+            # doesn't start a new bullet/number and isn't blank, a table, a
+            # fence, or a new heading, and gets appended to the current item.
+            while i < len(lines):
+                item_line = lines[i].strip()
+                is_new_item = item_line.startswith("- ") or re.match(r"^\d+\.\s", item_line)
+                if not is_new_item:
+                    break
+                item_parts = [re.sub(r"^-\s+", "", re.sub(r"^\d+\.\s+", "", item_line))]
                 i += 1
-            for bl in bullet_lines:
-                text = re.sub(r"^-\s+", "", bl)
-                text = re.sub(r"^\d+\.\s+", "", text)
+                while i < len(lines) and lines[i].strip() and not (
+                    lines[i].strip().startswith("- ")
+                    or re.match(r"^\d+\.\s", lines[i].strip())
+                    or lines[i].strip().startswith("#")
+                    or lines[i].strip().startswith("|")
+                ):
+                    item_parts.append(lines[i].strip())
+                    i += 1
+                text = " ".join(item_parts).replace("**", "")
                 last = add_paragraph_after(last, doc, text, style="Bulleted List")
             continue
 
@@ -288,6 +343,31 @@ def load_section_markdown(name: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+EQUATIONS = [
+    ("eq_psi", r"$PSI = \sum_i (c_i - r_i) \ln(c_i / r_i)$", "Population stability index"),
+    ("eq_ks", r"$KS = \max_x |F_{ref}(x) - F_{cur}(x)|$", "Kolmogorov-Smirnov statistic"),
+    ("eq_entropy", r"$H(p) = -p\ln p - (1-p)\ln(1-p)$", "Predictive entropy"),
+    ("eq_cusum", r"$S_t = \max(0,\ S_{t-1} + E_t - k)$", "CUSUM recursion (Page, 1954)"),
+    ("eq_recall", r"$\mathrm{recall@budget} = \dfrac{|\{\mathrm{frauds\ in\ top\ } b\cdot n\}|}{|\{\mathrm{frauds}\}|}$", "Recall at the alert budget"),
+]
+
+
+def render_equation_images(out_dir: Path) -> list[tuple[Path, str]]:
+    import matplotlib.pyplot as plt
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for name, latex, caption in EQUATIONS:
+        fig = plt.figure(figsize=(5, 0.7))
+        fig.text(0.02, 0.5, latex, fontsize=16, va="center")
+        fig.patch.set_alpha(0)
+        path = out_dir / f"{name}.png"
+        fig.savefig(path, dpi=200, transparent=True, bbox_inches="tight")
+        plt.close(fig)
+        paths.append((path, caption))
+    return paths
+
+
 TOP_LEVEL_HEADINGS = [
     "1. Introduction",
     "2. Literature and Reference Log",
@@ -317,20 +397,122 @@ def fill_section(doc: Document, heading_text: str, markdown_text: str) -> None:
     anchor_idx = clear_placeholder_paragraph(doc, idx)
     anchor = doc.paragraphs[anchor_idx]
 
-    next_idx = len(doc.paragraphs)
-    for later_heading in TOP_LEVEL_HEADINGS[TOP_LEVEL_HEADINGS.index(
-        next(h for h in TOP_LEVEL_HEADINGS if h in heading_text or heading_text in h)
-    ) + 1:]:
-        try:
-            next_idx = find_paragraph(doc, later_heading, style_prefix="Heading 1", start=idx + 1)
-            break
-        except ValueError:
-            continue
+    this_pos = next(i for i, h in enumerate(TOP_LEVEL_HEADINGS) if h in heading_text or heading_text in h)
+    next_heading_text = TOP_LEVEL_HEADINGS[this_pos + 1] if this_pos + 1 < len(TOP_LEVEL_HEADINGS) else None
 
-    insert_markdown_after(anchor, doc, markdown_text, next_heading_idx=next_idx)
+    insert_markdown_after(anchor, doc, markdown_text, next_heading_text=next_heading_text)
+
+
+def insert_figure_with_caption(doc: Document, heading_text: str, image_path: Path, caption: str, number: str) -> None:
+    idx = find_paragraph(doc, heading_text, style_prefix="Heading")
+    anchor = doc.paragraphs[idx]
+    anchor = add_picture_after(anchor, doc, image_path, width_inches=6.0)
+    add_paragraph_after(anchor, doc, f"Figure {number}. {caption}")
+
+
+def build() -> None:
+    doc = Document(str(TEMPLATE_PATH))
+    set_update_fields_on_open(doc)
+
+    # Cover page
+    set_paragraph_text(doc.paragraphs[4], TITLE)
+    for i, (name, reg) in enumerate(AUTHORS):
+        set_paragraph_text(doc.paragraphs[6 + i], f"{name} - {reg}")
+    set_paragraph_text(doc.paragraphs[20], REPORT_DATE)
+
+    # Template typos, body headings only (never the TOC, see set_paragraph_text)
+    idx = find_paragraph(doc, "ad Models", style_prefix="Heading")
+    set_paragraph_text(doc.paragraphs[idx], doc.paragraphs[idx].text.replace("ad Models", "and Models"))
+    idx = find_paragraph(doc, "3.2 Models", style_prefix="Heading")
+    set_paragraph_text(doc.paragraphs[idx], doc.paragraphs[idx].text.replace("3.2 Models", "3.3 Models"))
+
+    # Section 1: Introduction (domain info, libraries, principle note; leaves
+    # 1.3 Contributions and the [AUTHOR TO FILL] placeholder untouched)
+    fill_section(doc, "1. Introduction", load_section_markdown("01_introduction.md"))
+
+    # Section 2: Literature and Reference Log
+    fill_section(doc, "2. Literature and Reference Log", load_literature_for_report())
+
+    # Section 3: Concept Sketches, Equations, Models
+    fill_section(doc, "3. Concept Sketches", load_section_markdown("03_equations_models.md"))
+    eq_paths = render_equation_images(FIGURE_DIR / "equations")
+    eq_heading_idx = find_paragraph(doc, "3.2 Equations", style_prefix="Heading")
+    anchor = doc.paragraphs[eq_heading_idx]
+    for path, caption in eq_paths:
+        anchor = add_picture_after(anchor, doc, path, width_inches=4.0)
+        anchor = add_paragraph_after(anchor, doc, caption)
+    sketches_idx = find_paragraph(doc, "3.1 Concept", style_prefix="Heading")
+    anchor = doc.paragraphs[sketches_idx]
+    anchor = add_picture_after(anchor, doc, FIGURE_DIR / "architecture_diagram.png", width_inches=6.0)
+    anchor = add_paragraph_after(anchor, doc, "Figure 1. telltale architecture.")
+    anchor = add_picture_after(anchor, doc, FIGURE_DIR / "label_delay_timeline.png", width_inches=6.0)
+    anchor = add_paragraph_after(anchor, doc, "Figure 2. Label-delay timeline, one drift event (pilot).")
+    anchor = add_picture_after(anchor, doc, FIGURE_DIR / "drift_taxonomy.png", width_inches=6.0)
+    add_paragraph_after(anchor, doc, "Figure 3. Drift taxonomy: sudden, gradual, recurring, concept.")
+
+    # Section 4: Feasibility Calculation Sheet
+    fill_section(doc, "4. Feasibility Calculation Sheet", load_section_markdown("04_feasibility.md"))
+
+    # Section 5: Problem Statement and Objectives
+    fill_section(doc, "5. Problem Statement and Objectives", load_section_markdown("05_problem_objectives.md"))
+
+    # Section 6: Use Case and Stakeholder Definition
+    fill_section(doc, "6. Use Case and Stakeholder Definition", load_section_markdown("06_use_cases_stakeholders.md"))
+
+    # Section 7: Functional / Performance Requirement Sheet
+    fill_section(doc, "7. Functional / Performance Requirement Sheet", load_section_markdown("07_requirements.md"))
+
+    # Section 8: Analytical and Desk Study Report
+    fill_section(doc, "8. Analytical and Desk Study Report", load_section_markdown("08_desk_study.md"))
+
+    # Section 9: Component Identification and Characterization Sheet
+    fill_section(doc, "9. Component Identification and Characterization Sheet", load_section_markdown("09_component_sheet.md"))
+
+    # Section 10: First-Pass Performance Prediction Document
+    fill_section(doc, "10. First-Pass Performance Prediction Document", load_first_pass_for_report())
+
+    # Section 11: Early Simulation Output (pilot)
+    fill_section(doc, "11. Early Simulation Output", load_section_markdown("11_pilot.md"))
+    idx = find_paragraph(doc, "11. Early Simulation Output", style_prefix="Heading")
+    # figure inserted at the end of that section's content; find the last
+    # paragraph before section 12 and attach the picture there
+    next_idx = find_paragraph(doc, "12. Initial Qualitative Risk List", style_prefix="Heading 1")
+    anchor = doc.paragraphs[next_idx - 1]
+    add_picture_after(anchor, doc, Path("results/pilot/pilot_performance_over_time.png"), width_inches=6.0)
+
+    # Section 12: Initial Qualitative Risk List
+    fill_section(doc, "12. Initial Qualitative Risk List", load_section_markdown("12_risk_list.md"))
+
+    # Section 13.1 (metrics list + representative data files; full results
+    # content added separately once results/summary.json exists)
+    fill_section(doc, "13. Lab Test", load_section_markdown("13_1_metrics_and_data_files.md"))
+    fill_section(doc, "13. Lab Test", load_section_markdown("13_5_snippets.md"))
+
+    # Section 14.5 scale-up note (the rest of 14 needs results/summary.json)
+    fill_section(doc, "14. Analytical Model Validation Document", load_section_markdown("14_5_scale_up.md"))
+
+    # References
+    fill_section(doc, "References", load_section_markdown("16_references.md"))
+
+    OUT_DOCX.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(str(OUT_DOCX))
+    print(f"wrote {OUT_DOCX}")
+    print("Still needed before this is final: Section 13 full results, Section 14.1-14.4, "
+          "Section 15 Conclusion, and the Abstract (written last, PRD rule).")
+
+
+def load_literature_for_report() -> str:
+    text = Path("docs/literature.md").read_text(encoding="utf-8")
+    # Drop the file's own top-level '#' title line; the template heading covers it.
+    lines = text.split("\n")
+    return "\n".join(l for l in lines if not l.startswith("# Literature"))
+
+
+def load_first_pass_for_report() -> str:
+    text = Path("docs/first_pass_prediction.md").read_text(encoding="utf-8")
+    lines = text.split("\n")
+    return "\n".join(l for l in lines if not l.startswith("# First-pass"))
 
 
 if __name__ == "__main__":
-    print("report/build_report.py: run as part of Phase 7 once all results exist. "
-          "Importable helpers are ready; section-by-section assembly is added as "
-          "each piece of content is finalised (see docs/report_sections/).")
+    build()

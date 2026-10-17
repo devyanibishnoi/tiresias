@@ -79,6 +79,30 @@ report's Challenges Faced section.
   main experiment at roughly 3 to 3.5 hours; discussed with the author and cut evaluation seeds to
   10 (PRD Section 3 cut list item 1), projected at roughly 1.5 to 1.75 hours. `telltale/config.py`
   and `configs/main.yaml` updated accordingly.
+- Tried automating the Word-to-PDF export and a visual page check with `pywin32`'s Word COM
+  automation (Word is installed and registered on this machine). Two attempts both left
+  `WINWORD.EXE` running indefinitely with no output and no PDF produced, even with
+  `DisplayAlerts = 0` and a read-only open; likely this sandboxed shell cannot properly interact
+  with GUI-adjacent COM automation, similar to the earlier finding that it only exposes about 2
+  real CPU cores despite reporting 12. Gave up on automating this step; PDF export is a one-click
+  "Save As PDF" in Word and is left for the author to do themselves after reviewing the final
+  document, alongside the other author-only items in PRD Section 13.4.
+- Three real bugs found and fixed while building `report/build_report.py`'s markdown-to-docx
+  inserter, each caught by actually inspecting the generated document's paragraph structure rather
+  than trusting that it ran without an exception: (1) multi-line bulleted list items in the source
+  markdown (soft-wrapped across several physical lines) were only capturing the first line, with
+  continuation lines becoming stray separate paragraphs; fixed by accumulating continuation lines
+  until the next bullet marker, heading, table or blank line. (2) A stale search-boundary bug: the
+  index of the "next section heading" was computed once before any content was inserted, but each
+  insertion shifts every later paragraph's index, so by the time a later subsection needed that
+  boundary it excluded the exact paragraph being searched for, producing a duplicate "5.2
+  Objectives" heading instead of reusing the template's own line. Fixed by re-resolving the
+  boundary by text search on every lookup instead of caching an index. (3) The function that clears
+  a section's leading placeholder text had no concept of "this paragraph is itself a subsection
+  heading, not instructional filler", so for section 6 (whose Heading 1 has no separate placeholder
+  paragraph before "6.1. Use Cases") it blanked out "6.1. Use Cases" itself, then every piece of
+  real content got inserted after the wrong anchor. Fixed by sharing one `_is_structural` check
+  (numbered "N.N" prefix or a real Heading style) between both placeholder-clearing functions.
 - `docs/first_pass_prediction.md` (10 to 12 numeric predictions with ranges and reasoning) written
   and committed before the pilot or main run, per PRD Section 10.2. Phase 3 is done.
 - Phase 4 pilot run (S0, S1 moderate, 5 seeds, strategies B0/B1/M1, `configs/pilot.yaml`) completed
