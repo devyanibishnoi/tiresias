@@ -10,3 +10,10 @@ data/raw/
 /LEARNINGS.md
 /.claude/
 .ipynb_checkpoints/
+
+# Course-submission artifacts (this is now a resume/portfolio project, not a
+# course deliverable): the instructor's template, the built report, and the
+# report-section drafts written to the template's rubric-numbered structure.
+/report/template.docx
+/report/out/
+/docs/report_sections/
