@@ -127,16 +127,29 @@ def make_detection_delay_vs_severity(summary: dict, out_path: Path) -> None:
     severities = ["mild", "moderate", "severe"]
     strategies = ["M0", "M1"]
     fig, ax = plt.subplots(figsize=(7, 5))
-    for strategy in strategies:
+    any_nonzero = False
+    for strategy, offset in zip(strategies, [-0.03, 0.03]):
         delays = []
         for sev in severities:
             key = f"S1|{sev}|{strategy}"
             d = summary["detection"].get(key, {}).get("label_free_delay_median")
             delays.append(d if d is not None else float("nan"))
-        ax.plot(severities, delays, marker="o", label=strategy)
+            if d:
+                any_nonzero = True
+        xs = [i + offset for i in range(len(severities))]
+        ax.plot(xs, delays, marker="o", markersize=9, label=strategy)
+        for x, d in zip(xs, delays):
+            if d == d:  # not nan
+                ax.annotate(f"{d:.0f}", (x, d), textcoords="offset points", xytext=(0, 8), fontsize=8, ha="center")
+    ax.set_xticks(range(len(severities)))
+    ax.set_xticklabels(severities)
     ax.set_xlabel("S1 severity")
     ax.set_ylabel("median label-free detection delay (windows)")
+    ax.set_ylim(-0.5, max(2.0, ax.get_ylim()[1]))
     ax.set_title("Detection delay versus drift severity")
+    if not any_nonzero:
+        ax.text(0.5, 0.5, "Detection delay is 0 windows at every severity\n(evidence crosses the alarm height in the first drifted window)",
+                 transform=ax.transAxes, ha="center", va="center", fontsize=9, color="gray")
     ax.legend()
     fig.tight_layout()
     fig.savefig(out_path, dpi=130)
@@ -175,15 +188,31 @@ def make_ablation_bars(summary: dict, scenario: str, severity: str, out_path: Pa
     for strategy in strategies:
         dkey = f"{scenario}|{severity}|{strategy}"
         delays.append(summary["detection"].get(dkey, {}).get("label_free_delay_median") or 0)
-        fas.append(summary["false_alarms"].get(dkey, {}).get("rate_per_100") or 0)
+        # False alarm rate must come from the no-drift scenarios (S0, S6),
+        # not from `scenario`'s own pre-onset window: that window is short
+        # (30 windows for the default config) and near-certain to show 0
+        # alarms by chance even when the real S0/S6 rate is meaningfully
+        # different between strategies, which is the actual H2 comparison.
+        rate_s0 = summary["false_alarms"].get(f"S0|moderate|{strategy}", {}).get("rate_per_100")
+        rate_s6 = summary["false_alarms"].get(f"S6|moderate|{strategy}", {}).get("rate_per_100")
+        rates = [r for r in (rate_s0, rate_s6) if r is not None]
+        fas.append(float(np.mean(rates)) if rates else 0.0)
 
     fig, axes = plt.subplots(1, 2, figsize=(9, 4))
-    axes[0].bar(labels, delays, color="#4c72b0")
+    bars0 = axes[0].bar(labels, delays, color="#4c72b0")
+    axes[0].bar_label(bars0, fmt="%.1f")
     axes[0].set_ylabel("median detection delay (windows)")
     axes[0].set_title(f"Detection delay, {scenario} {severity}")
-    axes[1].bar(labels, fas, color="#dd8452")
-    axes[1].set_ylabel("false alarms per 100 windows")
-    axes[1].set_title("False alarm rate (S0/S6 average)")
+    axes[0].set_ylim(0, max(delays + [1]) * 1.3)
+
+    bars1 = axes[1].bar(labels, fas, color="#dd8452")
+    axes[1].bar_label(bars1, fmt="%.2f")
+    axes[1].axhline(1.0, color="red", linestyle="--", lw=1, label="PRD target (1/100)")
+    axes[1].set_ylabel("false alarms per 100 windows (S0/S6 mean)")
+    axes[1].set_title("False alarm rate")
+    axes[1].set_ylim(0, max(fas + [1.0]) * 1.3)
+    axes[1].legend(fontsize=8)
+
     fig.tight_layout()
     fig.savefig(out_path, dpi=130)
     plt.close(fig)
@@ -223,16 +252,26 @@ def make_s4_failure_figure(window_log: pd.DataFrame, out_path: Path) -> None:
     axes[0].axvline(60, color="black", linestyle="--", alpha=0.6, label="true onset")
     axes[0].set_ylabel("average precision")
     axes[0].legend()
-    axes[0].set_title("S4 (pure concept drift): performance collapses while label-free evidence stays flat")
+    axes[0].set_title("S4 (pure concept drift): performance collapses at onset")
 
     m1 = g[g["strategy"] == "M1"]
     mean_ev = m1.groupby("t")["combined_evidence"].mean()
     axes[1].plot(mean_ev.index, mean_ev.values, color="purple", label="M1 combined evidence")
     axes[1].axhline(1.0, color="gray", linestyle=":", label="edge of normal")
     axes[1].axvline(60, color="black", linestyle="--", alpha=0.6)
+
+    retrain_rows = m1[m1["retrain_executed"] & (m1["retrain_source"] == "backstop")]
+    if not retrain_rows.empty:
+        first_backstop_retrain = retrain_rows["t"].min()
+        axes[1].axvline(first_backstop_retrain, color="green", linestyle="--", alpha=0.6, label="first backstop retrain")
+        axes[1].annotate(
+            "evidence rises here reflects the backstop's own\nretrain destabilising the reference while the retrain\nwindow still straddles the concept-drift boundary,\nnot independent early detection of the original onset",
+            xy=(first_backstop_retrain, 0.5), xytext=(first_backstop_retrain + 5, 3.0),
+            fontsize=7, color="gray", arrowprops=dict(arrowstyle="->", color="gray", lw=0.8),
+        )
     axes[1].set_xlabel("window")
     axes[1].set_ylabel("label-free evidence")
-    axes[1].legend()
+    axes[1].legend(fontsize=8)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=130)

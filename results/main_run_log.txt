@@ -1,0 +1,39 @@
+running main: 720 (scenario, severity, seed, strategy) combinations
+[20/720] runs done, 91.5s elapsed, ~3202.4s remaining
+[40/720] runs done, 165.5s elapsed, ~2814.3s remaining
+[60/720] runs done, 215.3s elapsed, ~2368.4s remaining
+[80/720] runs done, 281.1s elapsed, ~2248.9s remaining
+[100/720] runs done, 412.4s elapsed, ~2556.7s remaining
+[120/720] runs done, 536.8s elapsed, ~2683.8s remaining
+[140/720] runs done, 639.1s elapsed, ~2647.8s remaining
+[160/720] runs done, 759.4s elapsed, ~2657.9s remaining
+[180/720] runs done, 872.4s elapsed, ~2617.1s remaining
+[200/720] runs done, 1017.6s elapsed, ~2645.8s remaining
+[220/720] runs done, 1180.0s elapsed, ~2681.8s remaining
+[240/720] runs done, 1313.2s elapsed, ~2626.4s remaining
+[260/720] runs done, 1478.0s elapsed, ~2614.9s remaining
+[280/720] runs done, 1703.5s elapsed, ~2677.0s remaining
+[300/720] runs done, 1888.7s elapsed, ~2644.2s remaining
+[320/720] runs done, 2091.6s elapsed, ~2614.5s remaining
+[340/720] runs done, 2315.4s elapsed, ~2587.7s remaining
+[360/720] runs done, 2533.5s elapsed, ~2533.5s remaining
+[380/720] runs done, 2734.1s elapsed, ~2446.3s remaining
+[400/720] runs done, 2939.6s elapsed, ~2351.7s remaining
+[420/720] runs done, 3087.7s elapsed, ~2205.5s remaining
+[440/720] runs done, 3276.1s elapsed, ~2084.8s remaining
+[460/720] runs done, 3484.1s elapsed, ~1969.2s remaining
+[480/720] runs done, 3689.9s elapsed, ~1845.0s remaining
+[500/720] runs done, 3938.7s elapsed, ~1733.0s remaining
+[520/720] runs done, 4150.7s elapsed, ~1596.4s remaining
+[540/720] runs done, 4355.1s elapsed, ~1451.7s remaining
+[560/720] runs done, 4631.3s elapsed, ~1323.2s remaining
+[580/720] runs done, 4923.5s elapsed, ~1188.4s remaining
+[600/720] runs done, 5230.7s elapsed, ~1046.1s remaining
+[620/720] runs done, 5558.9s elapsed, ~896.6s remaining
+[640/720] runs done, 5837.6s elapsed, ~729.7s remaining
+[660/720] runs done, 5915.6s elapsed, ~537.8s remaining
+[680/720] runs done, 6024.3s elapsed, ~354.4s remaining
+[700/720] runs done, 6078.2s elapsed, ~173.7s remaining
+[720/720] runs done, 6131.2s elapsed, ~0.0s remaining
+done in 6132.6s
+wrote results\summary.json

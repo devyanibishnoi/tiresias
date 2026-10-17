@@ -531,8 +531,13 @@ def build() -> None:
     if results_ready:
         insert_results_figures(doc)
         fill_section(doc, "15. Conclusion", load_section_markdown("15_conclusion.md"))
+        # Collapse the source file's line-wrapped paragraph into one flowing
+        # line: a literal "\n" inside a single run's text is not a Word line
+        # break, OOXML text runs do not interpret it, so without this the
+        # wrap points would show up as stray characters in the abstract.
+        abstract_text = " ".join(load_section_markdown("00_abstract.md").strip().split("\n"))
         abstract_idx = find_paragraph(doc, "Write a project abstract")
-        set_paragraph_text(doc.paragraphs[abstract_idx], load_section_markdown("00_abstract.md").strip())
+        set_paragraph_text(doc.paragraphs[abstract_idx], abstract_text)
         still_needed = []
     else:
         still_needed = ["Section 13.2/13.3 results tables and figures", "Section 14.1/14.2 prediction/hypotheses",

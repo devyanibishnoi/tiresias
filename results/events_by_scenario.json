@@ -1,0 +1,63 @@
+{
+  "S0_moderate": [],
+  "S1_mild": [
+    {
+      "window": 60,
+      "kind": "onset",
+      "drift_type": "sudden"
+    }
+  ],
+  "S1_moderate": [
+    {
+      "window": 60,
+      "kind": "onset",
+      "drift_type": "sudden"
+    }
+  ],
+  "S1_severe": [
+    {
+      "window": 60,
+      "kind": "onset",
+      "drift_type": "sudden"
+    }
+  ],
+  "S2_moderate": [
+    {
+      "window": 60,
+      "kind": "onset",
+      "drift_type": "gradual"
+    }
+  ],
+  "S3_moderate": [
+    {
+      "window": 50,
+      "kind": "onset",
+      "drift_type": "recurring"
+    },
+    {
+      "window": 70,
+      "kind": "offset",
+      "drift_type": "recurring"
+    },
+    {
+      "window": 110,
+      "kind": "onset",
+      "drift_type": "recurring"
+    }
+  ],
+  "S4_moderate": [
+    {
+      "window": 60,
+      "kind": "onset",
+      "drift_type": "concept"
+    }
+  ],
+  "S5_moderate": [
+    {
+      "window": 60,
+      "kind": "onset",
+      "drift_type": "mixed"
+    }
+  ],
+  "S6_moderate": []
+}
