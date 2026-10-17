@@ -16,8 +16,9 @@ from pathlib import Path
 import numpy as np
 
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt
+from docx.shared import Inches, Pt, RGBColor
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
@@ -138,29 +139,95 @@ def _apply_grid_borders(table: Table) -> None:
     tbl_pr.append(borders)
 
 
+_INLINE_TOKEN = re.compile(r"(\*\*[^*\n]+\*\*|`[^`\n]+`)")
+
+
+def add_inline_formatted_runs(paragraph: Paragraph, text: str) -> None:
+    """Parse **bold** and `code` spans out of plain text and add them as
+    properly formatted runs, instead of leaving the markdown markers in as
+    literal characters (which is what naively setting paragraph/cell text
+    to the raw source string does: about 238 stray backticks and a stray
+    "**...**" pair were visible in the first PDF export)."""
+    for part in _INLINE_TOKEN.split(text):
+        if not part:
+            continue
+        if part.startswith("**") and part.endswith("**") and len(part) > 4:
+            run = paragraph.add_run(part[2:-2])
+            run.bold = True
+        elif part.startswith("`") and part.endswith("`") and len(part) > 2:
+            run = paragraph.add_run(part[1:-1])
+            run.font.name = "Consolas"
+            run.font.size = Pt(9.5)
+        else:
+            paragraph.add_run(part)
+
+
+def set_cell_text_formatted(cell, text: str, bold: bool = False) -> None:
+    p = cell.paragraphs[0]
+    add_inline_formatted_runs(p, text)
+    if bold:
+        for run in p.runs:
+            run.bold = True
+
+
 def add_table_after(anchor: Paragraph, doc: Document, header: list, rows: list) -> Table:
     table = doc.add_table(rows=1, cols=len(header))
     _apply_grid_borders(table)
     for i, h in enumerate(header):
-        cell = table.rows[0].cells[i]
-        cell.text = str(h)
-        for p in cell.paragraphs:
-            for run in p.runs:
-                run.bold = True
+        set_cell_text_formatted(table.rows[0].cells[i], str(h), bold=True)
     for row in rows:
         cells = table.add_row().cells
         for i, v in enumerate(row):
             if i < len(cells):
-                cells[i].text = str(v)
+                set_cell_text_formatted(cells[i], str(v))
     anchor._p.addnext(table._tbl)
     return table
 
 
 def add_paragraph_after(anchor, doc: Document, text: str, style: str | None = None) -> Paragraph:
-    new_p = doc.add_paragraph(text, style=style)
+    new_p = doc.add_paragraph(style=style)
+    add_inline_formatted_runs(new_p, text)
     anchor_elem = anchor._tbl if isinstance(anchor, Table) else anchor._p
     anchor_elem.addnext(new_p._p)
     return new_p
+
+
+def _shade_paragraph(p: Paragraph, hex_color: str) -> None:
+    pPr = p._p.get_or_add_pPr()
+    shd = pPr.makeelement(qn("w:shd"), {qn("w:val"): "clear", qn("w:color"): "auto", qn("w:fill"): hex_color})
+    pPr.append(shd)
+
+
+def add_code_block_after(anchor, doc: Document, code_text: str) -> Paragraph:
+    """Code snippets need their own path, not the markdown paragraph
+    handler: that runs **bold**/`code` inline parsing (which would
+    misinterpret Python's own ** operator or backticks inside a docstring
+    as formatting markers) and, more importantly, a literal "\\n" inside a
+    single run's text is not a Word line break (OOXML text runs do not
+    interpret it), so multi-line code set as one run's text collapsed onto
+    one justified, re-flowed line with lost indentation. This builds one
+    run per line with explicit <w:br/> breaks between them, each line's
+    leading whitespace marked xml:space="preserve" so indentation survives,
+    left-aligned (the template's Normal style is justified, which stretches
+    spacing on short code lines), monospace, on a light shaded background."""
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p.paragraph_format.left_indent = Inches(0.25)
+    _shade_paragraph(p, "F2F2F2")
+
+    lines = code_text.split("\n")
+    run = p.add_run()
+    run.font.name = "Consolas"
+    run.font.size = Pt(9)
+    for idx, line in enumerate(lines):
+        if idx > 0:
+            run.add_break()
+        t_elem = run._r.add_t(line if line else " ")
+        t_elem.set(qn("xml:space"), "preserve")
+
+    anchor_elem = anchor._tbl if isinstance(anchor, Table) else anchor._p
+    anchor_elem.addnext(p._p)
+    return p
 
 
 def add_picture_after(anchor, doc: Document, image_path: Path, width_inches: float = 6.0) -> Paragraph:
@@ -184,6 +251,27 @@ def add_picture_after(anchor, doc: Document, image_path: Path, width_inches: flo
 # ---------------------------------------------------------------------------
 
 _SUBHEADING_NUMBER = re.compile(r"^(\d+\.\d+)")
+
+
+def _has_direct_numPr(p: Paragraph) -> bool:
+    """True if `p` has its OWN paragraph-level <w:numPr>, as opposed to
+    inheriting automatic numbering purely from its style. This template's
+    Heading 2 style carries <w:numPr><w:ilvl w:val="1"/></w:numPr> at the
+    STYLE level (invisible here), so every Heading-2 paragraph gets an
+    auto-number from Word regardless of what this function returns; a few
+    specific paragraphs (the template's own "3.1 Concept Sketches", "3.2
+    Equations", "3.2 Models") additionally carry a paragraph-level numPr
+    override, which is how the template author apparently suppressed the
+    auto-number for just those three and typed the number by hand instead.
+    Used to decide whether to strip a literal "N.N" prefix before setting
+    text on a matched heading: strip it for pure style-level numbering
+    (the auto-number would otherwise double it), keep it where a direct
+    override is already present (there the literal text is the only number
+    that will show)."""
+    pPr = p._p.find(qn("w:pPr"))
+    if pPr is None:
+        return False
+    return pPr.find(qn("w:numPr")) is not None
 
 
 def paragraph_index(doc: Document, p: Paragraph) -> int:
@@ -214,6 +302,22 @@ def _find_existing_named_heading(doc: Document, search_start: int, search_end: i
         if p.style.name == "Heading 2" and p.text.strip().lower() == target:
             return i
     return None
+
+
+def _split_table_row(line: str) -> list[str]:
+    """Split a markdown table row on "|", respecting "\\|" as an escaped
+    literal pipe inside a cell (standard GFM table escaping). A naive
+    line.strip("|").split("|") does not honour the escape, so a cell like
+    "`detection.S1\\|moderate\\|M1...`" (needed because the dotted key
+    itself contains pipe characters) silently split into extra cells and
+    left a stray trailing backslash in the truncated final cell."""
+    body = line.strip()
+    if body.startswith("|"):
+        body = body[1:]
+    if body.endswith("|"):
+        body = body[:-1]
+    cells = re.split(r"(?<!\\)\|", body)
+    return [c.replace("\\|", "|") for c in cells]
 
 
 def insert_markdown_after(anchor, doc: Document, markdown_text: str, next_heading_text: str | None = None):
@@ -267,12 +371,27 @@ def insert_markdown_after(anchor, doc: Document, markdown_text: str, next_headin
                     existing_idx = _find_existing_named_heading(doc, start_search, end, name_only)
             if existing_idx is not None:
                 existing_p = doc.paragraphs[existing_idx]
-                set_paragraph_text(existing_p, heading_text)
+                # Heading-styled paragraphs in this template carry automatic
+                # outline numbering at the STYLE level (Heading 2's style
+                # definition has <w:numPr><w:ilvl w:val="1"/></w:numPr>),
+                # invisible to python-docx's .text but very visible in the
+                # rendered document: setting literal "1.1 Domain
+                # information" text on a paragraph Word already numbers
+                # itself renders as "1.1 1.1 Domain information". Strip any
+                # leading "N.N" from the text we set on a real Heading
+                # style and let Word supply the number; only paragraphs we
+                # create ourselves (the "else" branch below, plain bold
+                # Normal text, no style-level numbering) need the literal
+                # number written in.
+                text_to_set = heading_text
+                if existing_p.style.name.startswith("Heading") and not _has_direct_numPr(existing_p):
+                    text_to_set = _SUBHEADING_NUMBER.sub("", heading_text).strip()
+                set_paragraph_text(existing_p, text_to_set)
                 last = clear_next_placeholder(doc, existing_p)
             else:
-                p = add_paragraph_after(last, doc, "")
-                run = p.add_run(heading_text)
-                run.bold = True
+                p = add_paragraph_after(last, doc, heading_text)
+                for run in p.runs:
+                    run.bold = True
                 last = p
             i += 1
             continue
@@ -282,9 +401,9 @@ def insert_markdown_after(anchor, doc: Document, markdown_text: str, next_headin
             while i < len(lines) and lines[i].strip().startswith("|"):
                 table_lines.append(lines[i].strip())
                 i += 1
-            header = [c.strip() for c in table_lines[0].strip("|").split("|")]
+            header = [c.strip() for c in _split_table_row(table_lines[0])]
             body_lines = [l for l in table_lines[2:]] if len(table_lines) > 1 else []
-            rows = [[c.strip() for c in bl.strip("|").split("|")] for bl in body_lines]
+            rows = [[c.strip() for c in _split_table_row(bl)] for bl in body_lines]
             last = add_table_after(last, doc, header, rows)
             continue
 
@@ -308,7 +427,7 @@ def insert_markdown_after(anchor, doc: Document, markdown_text: str, next_headin
                 ):
                     item_parts.append(lines[i].strip())
                     i += 1
-                text = " ".join(item_parts).replace("**", "")
+                text = " ".join(item_parts)
                 last = add_paragraph_after(last, doc, text, style="Bulleted List")
             continue
 
@@ -319,11 +438,7 @@ def insert_markdown_after(anchor, doc: Document, markdown_text: str, next_headin
                 code_lines.append(lines[i])
                 i += 1
             i += 1  # skip closing fence
-            p = add_paragraph_after(last, doc, "\n".join(code_lines))
-            for run in p.runs:
-                run.font.name = "Consolas"
-                run.font.size = Pt(9)
-            last = p
+            last = add_code_block_after(last, doc, "\n".join(code_lines))
             continue
 
         # Plain paragraph: accumulate until a blank line.
@@ -333,7 +448,6 @@ def insert_markdown_after(anchor, doc: Document, markdown_text: str, next_headin
             para_lines.append(lines[i].strip())
             i += 1
         text = " ".join(para_lines)
-        text = text.replace("**", "")  # light markdown bold marker cleanup
         last = add_paragraph_after(last, doc, text)
 
     return last

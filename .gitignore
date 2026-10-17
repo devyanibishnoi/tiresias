@@ -18,3 +18,4 @@ data/raw/
 /report/out/
 /docs/report_sections/
 /report/report_identity.py
+/report_fixes.md
