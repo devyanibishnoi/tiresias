@@ -1,4 +1,4 @@
-# 13.5 Short code snippets (PRD 13.1 rule 5: at most four, each under 25 lines)
+## 13.5 Short code snippets (PRD 13.1 rule 5: at most four, each under 25 lines)
 
 ## PSI computation (`telltale/monitors/stats.py`)
 

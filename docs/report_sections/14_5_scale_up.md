@@ -1,4 +1,4 @@
-# 14.5 Initial Scale-Up Consideration Note
+## 14.5 Initial Scale-Up Consideration Note
 
 Measured throughput (`telltale.cli profile`, `results/profiling.json`): monitor evidence
 computation runs at roughly 117,000 transactions per second at a 1,000-row window, rising to about

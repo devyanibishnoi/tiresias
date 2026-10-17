@@ -13,11 +13,18 @@ import json
 import re
 from pathlib import Path
 
+import numpy as np
+
 from docx import Document
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 from docx.table import Table
 from docx.text.paragraph import Paragraph
+
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from telltale.config import StreamConfig
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = ROOT / "report" / "template.docx"
@@ -483,22 +490,138 @@ def build() -> None:
     # Section 12: Initial Qualitative Risk List
     fill_section(doc, "12. Initial Qualitative Risk List", load_section_markdown("12_risk_list.md"))
 
-    # Section 13.1 (metrics list + representative data files; full results
-    # content added separately once results/summary.json exists)
-    fill_section(doc, "13. Lab Test", load_section_markdown("13_1_metrics_and_data_files.md"))
-    fill_section(doc, "13. Lab Test", load_section_markdown("13_5_snippets.md"))
-
-    # Section 14.5 scale-up note (the rest of 14 needs results/summary.json)
-    fill_section(doc, "14. Analytical Model Validation Document", load_section_markdown("14_5_scale_up.md"))
-
     # References
     fill_section(doc, "References", load_section_markdown("16_references.md"))
+
+    # Sections 13 and 14 each get exactly ONE fill_section call: calling it
+    # more than once for the same top-level heading re-triggers placeholder
+    # clearing against content the previous call already inserted, which
+    # corrupted earlier builds (see docs/dev_log.md). The dynamic
+    # (results-dependent) and static pieces are concatenated into one
+    # markdown string per section instead.
+    summary_path = Path("results/summary.json")
+    main_log_path = Path("results/per_window_log.csv.gz")
+    results_ready = summary_path.exists() and main_log_path.exists()
+
+    md_13_2 = ""
+    md_14_1_2 = ""
+    summary = hypotheses = main_log = None
+    if results_ready:
+        import pandas as pd
+
+        from telltale.summarize import judge_hypotheses
+
+        with open(summary_path) as f:
+            summary = json.load(f)
+        main_log = pd.read_csv(main_log_path)
+        hypotheses = judge_hypotheses(summary, StreamConfig())
+        md_13_2, md_14_1_2 = build_results_markdown(summary, hypotheses)
+
+    section_13_md = "\n\n".join(filter(None, [
+        load_section_markdown("13_1_metrics.md"),
+        md_13_2,
+        load_section_markdown("13_4_data_files.md"),
+        load_section_markdown("13_5_snippets.md"),
+    ]))
+    fill_section(doc, "13. Lab Test", section_13_md)
+
+    section_14_md = "\n\n".join(filter(None, [md_14_1_2, load_section_markdown("14_5_scale_up.md")]))
+    fill_section(doc, "14. Analytical Model Validation Document", section_14_md)
+
+    if results_ready:
+        insert_results_figures(doc)
+        fill_section(doc, "15. Conclusion", load_section_markdown("15_conclusion.md"))
+        abstract_idx = find_paragraph(doc, "Write a project abstract")
+        set_paragraph_text(doc.paragraphs[abstract_idx], load_section_markdown("00_abstract.md").strip())
+        still_needed = []
+    else:
+        still_needed = ["Section 13.2/13.3 results tables and figures", "Section 14.1/14.2 prediction/hypotheses",
+                         "Section 15 Conclusion", "the Abstract (written last, PRD rule)"]
 
     OUT_DOCX.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(OUT_DOCX))
     print(f"wrote {OUT_DOCX}")
-    print("Still needed before this is final: Section 13 full results, Section 14.1-14.4, "
-          "Section 15 Conclusion, and the Abstract (written last, PRD rule).")
+    if still_needed:
+        print("Still needed before this is final:", ", ".join(still_needed))
+    else:
+        print("All sections filled. Remaining author-only items: PRD Section 13.4 "
+              "(1.3 contributions, screenshots, proofreading, public/private decision).")
+
+
+def build_results_markdown(summary: dict, hypotheses: dict) -> tuple[str, str]:
+    """Returns (section_13_results_markdown, section_14_validation_markdown)
+    as plain strings, built only from results/summary.json and the
+    hypothesis verdicts; callers concatenate these with the static section
+    content and insert with a single fill_section call (see build())."""
+    scenarios = sorted({k.split("|")[0] for k in summary["groups"]})
+
+    rows_13_2 = []
+    for scenario in scenarios:
+        for strategy in ["B0", "B1", "B2", "B3", "M0", "M1"]:
+            g = summary["groups"].get(f"{scenario}|moderate|{strategy}")
+            if g:
+                ci = g["time_averaged_recall_ci95"]
+                ci_text = f"[{ci[0]:.3f}, {ci[1]:.3f}]" if ci[0] == ci[0] else "n/a"
+                rows_13_2.append([
+                    scenario, strategy,
+                    f"{g['time_averaged_recall_mean']:.3f}", ci_text,
+                    f"{g['retrain_count_mean']:.1f}",
+                ])
+
+    md_13_2 = "## 13.2 Scenario results\n\n"
+    md_13_2 += "| Scenario | Strategy | Time-avg recall (mean) | 95% CI | Mean retrains |\n"
+    md_13_2 += "|---|---|---|---|---|\n"
+    for r in rows_13_2:
+        md_13_2 += "| " + " | ".join(r) + " |\n"
+    md_13_2 += "\n## 13.3 Ablation, failure analysis, sensitivity, false alarms\n\n"
+    md_13_2 += "See the ablation bars, false alarm rate and S4 failure figures below.\n"
+
+    # 14.1 prediction vs observed, 14.2 hypothesis verdicts
+    h1 = hypotheses.get("H1", {})
+    h3 = hypotheses.get("H3", {})
+    h4 = hypotheses.get("H4", {})
+    h5 = hypotheses.get("H5", {})
+
+    md_14 = "## 14.1 Predicted versus observed\n\n"
+    md_14 += "| Prediction | Predicted range | Observed | Held? |\n"
+    md_14 += "|---|---|---|---|\n"
+    h1_leads = [r["median_lead_time"] for r in h1.get("per_scenario", {}).values()]
+    md_14 += f"| Early-warning lead time (median), S1/S2/S3 | about D windows (6-9) | {np.median(h1_leads):.1f} windows (median across scenarios) | {'yes' if h1.get('supported') else 'no'} |\n" if h1_leads else ""
+    md_14 += f"| Retrain count ratio, M1 vs B1 | at most 0.60 | {h3.get('mean_retrain_ratio'):.3f} | {'yes' if h3.get('supported') else 'no'} |\n" if h3.get('mean_retrain_ratio') is not None else ""
+    md_14 += f"| Backstop detection delay, S4 | D to D+3 (about 7-10) | {h4.get('backstop_median_delay')} windows | {'yes' if h4.get('supported') else 'no'} |\n"
+    fa_vals = list(h5.get("rates", {}).values())
+    md_14 += f"| False alarm rate, S0/S6 | 0 to 1 per 100 | {np.mean(fa_vals):.2f} per 100 (mean) | {'yes' if h5.get('supported') else 'no'} |\n" if fa_vals else ""
+
+    md_14 += "\n## 14.2 Hypotheses\n\n"
+    md_14 += "| Hypothesis | Verdict | Basis |\n"
+    md_14 += "|---|---|---|\n"
+    md_14 += f"| H1: label-free lead time >= D/2 over backstop | {'Supported' if h1.get('supported') else 'Not supported'} | Median lead time per scenario, paired Wilcoxon |\n"
+    md_14 += "| H2: combined signal beats either alone on delay-vs-false-alarm | See ablation figure and table | M1 vs M1a vs M1b |\n"
+    md_14 += f"| H3: retrains <= 60% of fixed schedule, recall within 3% | {'Supported' if h3.get('supported') else 'Not supported'} | Mean ratios across scenarios |\n"
+    md_14 += f"| H4: label-free fails on S4, backstop catches it within D+5 | {'Supported' if h4.get('supported') else 'Not supported'} | S4 label-free alarm count, backstop median delay |\n"
+    md_14 += f"| H5: false alarm rate <= 1/100 on S0, S6 | {'Supported' if h5.get('supported') else 'Not supported'} | Measured rate per strategy |\n"
+
+    return md_13_2, md_14
+
+
+def insert_results_figures(doc: Document) -> None:
+    """13.3's figures (performance over time, detection delay vs severity,
+    retrain vs recall, ablation, false alarms, S4 failure), inserted after
+    the combined section 13 markdown is already in the document."""
+    idx = find_paragraph(doc, "13.3", style_prefix=None)
+    anchor = doc.paragraphs[idx]
+    for fname, cap, num in [
+        ("performance_over_time_s1_moderate.png", "Performance over time, S1 moderate.", "5"),
+        ("detection_delay_vs_severity.png", "Detection delay versus drift severity.", "6"),
+        ("retrain_vs_recall.png", "Retrain count versus time-averaged recall.", "7"),
+        ("ablation_bars.png", "Ablation: detection delay and false alarm rate by signal.", "8"),
+        ("false_alarm_rates.png", "False alarm rates, S0 and S6.", "9"),
+        ("s4_failure.png", "S4 failure figure: label-free evidence stays flat while performance collapses.", "10"),
+    ]:
+        path = FIGURE_DIR / fname
+        if path.exists():
+            anchor = add_picture_after(anchor, doc, path, width_inches=6.0)
+            anchor = add_paragraph_after(anchor, doc, f"Figure {num}. {cap}")
 
 
 def load_literature_for_report() -> str:

@@ -103,6 +103,27 @@ report's Challenges Faced section.
   paragraph before "6.1. Use Cases") it blanked out "6.1. Use Cases" itself, then every piece of
   real content got inserted after the wrong anchor. Fixed by sharing one `_is_structural` check
   (numbered "N.N" prefix or a real Heading style) between both placeholder-clearing functions.
+- Found a fourth bug while end-to-end smoke testing section 13 (which combines several pieces:
+  the metrics list, representative data files, the results-dependent scenario table, and the code
+  snippets): calling `fill_section` once per piece for the SAME top-level heading re-triggers
+  placeholder clearing against content the previous call already inserted, duplicating or
+  scrambling it. Restructured so every top-level heading gets exactly one `fill_section` call, by
+  concatenating all of a section's markdown pieces into one string first
+  (`build_results_markdown`, `insert_results_figures` in `report/build_report.py`). While fixing
+  this, also split `docs/report_sections/13_1_metrics_and_data_files.md` into separate
+  `13_1_metrics.md` and `13_4_data_files.md` files so the concatenation order could match the
+  numeric section order (13.1, 13.2, 13.3, 13.4, 13.5) instead of the accidental 13.1, 13.4, 13.2,
+  13.3 order the original combined file produced. Separately: tables inserted via `add_table_after`
+  do not show up when iterating `doc.paragraphs` (python-docx only walks `<w:p>` elements, not
+  `<w:tbl>`), which looked like a missing-table bug during debugging until checked via the
+  document body's raw XML children in order; worth remembering for any future python-docx
+  debugging in this project.
+- Full smoke test of `report/build_report.py` against the pilot's `summary.json` and
+  `per_window_log.csv.gz` (temporarily copied to the main run's expected paths, then removed) ran
+  clean end to end: 0 leftover template placeholders outside the two that are supposed to wait
+  (Abstract, Conclusion), correct section numbering throughout, all tables and code snippets in
+  place. The report builder is considered structurally done; what remains is real numbers once the
+  main run finishes.
 - `docs/first_pass_prediction.md` (10 to 12 numeric predictions with ranges and reasoning) written
   and committed before the pilot or main run, per PRD Section 10.2. Phase 3 is done.
 - Phase 4 pilot run (S0, S1 moderate, 5 seeds, strategies B0/B1/M1, `configs/pilot.yaml`) completed
