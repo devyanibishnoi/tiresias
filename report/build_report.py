@@ -505,15 +505,11 @@ def build() -> None:
 
     md_13_2 = ""
     md_14_1_2 = ""
-    summary = hypotheses = main_log = None
     if results_ready:
-        import pandas as pd
-
         from telltale.summarize import judge_hypotheses
 
         with open(summary_path) as f:
             summary = json.load(f)
-        main_log = pd.read_csv(main_log_path)
         hypotheses = judge_hypotheses(summary, StreamConfig())
         md_13_2, md_14_1_2 = build_results_markdown(summary, hypotheses)
 
