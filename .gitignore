@@ -4,4 +4,7 @@ __pycache__/
 .pytest_cache/
 data/raw/
 *.log
+/PRD.md
+/CLAUDE.md
+/docs/inputs/
 .ipynb_checkpoints/
