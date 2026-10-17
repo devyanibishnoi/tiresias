@@ -156,6 +156,14 @@ report's Challenges Faced section.
 - Full report built from real results (`report/build_report.py`): 282 paragraphs, 16 tables, 0
   leftover template placeholders, 0 em dashes, all 16 sections present in order. `report/out/
   telltale_report.docx` is the current candidate for the final deliverable.
+- Blocked, author-provided: the P1 real-data check (PRD 5.4) needs `data/raw/creditcard.csv` (the
+  Kaggle `mlg-ulb/creditcardfraud` dataset), which is not present. Per PRD 5.4's own instruction
+  ("if the file is missing, skip this item and log it"), `telltale.cli real-check` is left
+  unimplemented with a clear message rather than faked. All P0 work is complete; this and the other
+  P1 items (sensitivity sweeps over D/K/m, a second model type, interim adaptation) were not
+  reached given the time spent on the Phase 2/3/7 bugs above, consistent with PRD's cut list
+  (Section 3), which lists all of these as cut before the first-pass prediction, the Section 9
+  ablation, or the report itself.
 - `docs/first_pass_prediction.md` (10 to 12 numeric predictions with ranges and reasoning) written
   and committed before the pilot or main run, per PRD Section 10.2. Phase 3 is done.
 - Phase 4 pilot run (S0, S1 moderate, 5 seeds, strategies B0/B1/M1, `configs/pilot.yaml`) completed

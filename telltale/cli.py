@@ -312,6 +312,24 @@ def cmd_make_figures(_args: argparse.Namespace) -> None:
     print("figures written to", FIGURE_DIR)
 
 
+def cmd_real_check(_args: argparse.Namespace) -> None:
+    """PRD Section 5.4 (P1, detection only): semi-synthetic check on the
+    Kaggle credit card fraud dataset. The dataset is not committed (it is
+    large and not ours to redistribute); if the author has not downloaded
+    it to data/raw/creditcard.csv, PRD 5.4's own instruction is to skip
+    this item and log it, not to fake a result."""
+    raw_path = Path("data/raw/creditcard.csv")
+    if not raw_path.exists():
+        print(f"real-check: {raw_path} not found.")
+        print("Download the Kaggle dataset 'mlg-ulb/creditcardfraud' to that path to run this "
+              "P1 check (PRD Section 5.4). Skipping, as PRD 5.4 instructs when the file is "
+              "missing; logged in docs/dev_log.md.")
+        sys.exit(1)
+    print("real-check: data/raw/creditcard.csv found, but the semi-synthetic real-data check "
+          "(PRD 5.4) was not implemented in the time available (P1, cut per docs/dev_log.md).")
+    sys.exit(1)
+
+
 def _not_implemented(name: str):
     def _run(_args: argparse.Namespace) -> None:
         print(f"telltale.cli {name}: not implemented yet (see PRD.md Section 12 for the build plan)")
@@ -333,7 +351,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("profile").set_defaults(func=cmd_profile)
     sub.add_parser("make-figures").set_defaults(func=cmd_make_figures)
-    sub.add_parser("real-check").set_defaults(func=_not_implemented("real-check"))
+    sub.add_parser("real-check").set_defaults(func=cmd_real_check)
 
     return parser
 
