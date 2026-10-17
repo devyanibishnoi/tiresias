@@ -579,7 +579,20 @@ def build_results_markdown(summary: dict, hypotheses: dict) -> tuple[str, str]:
     for r in rows_13_2:
         md_13_2 += "| " + " | ".join(r) + " |\n"
     md_13_2 += "\n## 13.3 Ablation, failure analysis, sensitivity, false alarms\n\n"
-    md_13_2 += "See the ablation bars, false alarm rate and S4 failure figures below.\n"
+    md_13_2 += (
+        "Figure 5 shows performance over time on S1 moderate with M1's alarms and retrains marked. "
+        "Figure 6 shows the label-free detection delay holding at 0 windows across every S1 "
+        "severity. Figure 7 plots retrain count against time-averaged recall across all strategies "
+        "and scenarios. Figure 8 is the ablation of input-only, score-only and combined evidence "
+        "on detection delay and false alarm rate (H2). Figure 9 is the false alarm rate by "
+        "strategy on the no-drift controls S0 and S6 (H5): it is where the one hypothesis that did "
+        "not fully hold is visible directly, M1 and M1b sit above the PRD target line. Figure 10 "
+        "is the S4 failure case (H4): label-free evidence stays at the edge of normal through the "
+        "true onset and the backstop's own retrain, and only rises afterward, during the retrain's "
+        "transition period, not as early detection of the original drift. Sensitivity sweeps over "
+        "label delay D, schedule K and maturity m (P1) were not run in the time available; see "
+        "docs/dev_log.md.\n"
+    )
 
     # 14.1 prediction vs observed, 14.2 hypothesis verdicts
     h1 = hypotheses.get("H1", {})

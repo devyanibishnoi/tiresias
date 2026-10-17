@@ -51,6 +51,8 @@ Full main run: 10 evaluation seeds, 8 scenarios (S1 at three severities), 8 stra
   target slightly (1.08 per 100 on the no-drift control): a genuine negative finding, investigated
   and reported honestly in the report's Section 13 and 14, not hidden.
 
+![False alarm rate by strategy](results/figures/false_alarm_rates.png)
+
 See `results/figures/` for all plots, `results/pilot/` for the earlier 5-seed pilot run.
 
 ## Limitations
