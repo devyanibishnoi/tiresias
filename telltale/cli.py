@@ -266,6 +266,28 @@ def cmd_profile(_args: argparse.Namespace) -> None:
     print(f"wrote {fig_path}")
 
 
+def cmd_make_figures(_args: argparse.Namespace) -> None:
+    from telltale.figures import make_architecture_diagram, make_drift_taxonomy, make_label_delay_timeline
+
+    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+    make_architecture_diagram(FIGURE_DIR / "architecture_diagram.png")
+    make_drift_taxonomy(FIGURE_DIR / "drift_taxonomy.png")
+
+    pilot_log_path = Path("results/pilot/per_window_log.csv.gz")
+    if pilot_log_path.exists():
+        import pandas as pd
+
+        pilot_log = pd.read_csv(pilot_log_path)
+        make_label_delay_timeline(pilot_log, StreamConfig(), FIGURE_DIR / "label_delay_timeline.png")
+    else:
+        print("skipping label-delay timeline: results/pilot/per_window_log.csv.gz not found, run the pilot first")
+
+    print("figures written to", FIGURE_DIR)
+    print("remaining data-dependent figures (performance over time, detection delay vs severity, "
+          "retrain vs recall, ablation bars, false alarm rates, S4 failure, sensitivity, scale-up) "
+          "are built once the main run and profiling exist; see telltale/figures.py")
+
+
 def _not_implemented(name: str):
     def _run(_args: argparse.Namespace) -> None:
         print(f"telltale.cli {name}: not implemented yet (see PRD.md Section 12 for the build plan)")
@@ -286,7 +308,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.set_defaults(func=cmd_run)
 
     sub.add_parser("profile").set_defaults(func=cmd_profile)
-    sub.add_parser("make-figures").set_defaults(func=_not_implemented("make-figures"))
+    sub.add_parser("make-figures").set_defaults(func=cmd_make_figures)
     sub.add_parser("real-check").set_defaults(func=_not_implemented("real-check"))
 
     return parser
