@@ -267,7 +267,19 @@ def cmd_profile(_args: argparse.Namespace) -> None:
 
 
 def cmd_make_figures(_args: argparse.Namespace) -> None:
-    from telltale.figures import make_architecture_diagram, make_drift_taxonomy, make_label_delay_timeline
+    import pandas as pd
+
+    from telltale.figures import (
+        make_ablation_bars,
+        make_architecture_diagram,
+        make_detection_delay_vs_severity,
+        make_drift_taxonomy,
+        make_false_alarm_rates,
+        make_label_delay_timeline,
+        make_performance_over_time,
+        make_retrain_vs_recall,
+        make_s4_failure_figure,
+    )
 
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
     make_architecture_diagram(FIGURE_DIR / "architecture_diagram.png")
@@ -275,17 +287,29 @@ def cmd_make_figures(_args: argparse.Namespace) -> None:
 
     pilot_log_path = Path("results/pilot/per_window_log.csv.gz")
     if pilot_log_path.exists():
-        import pandas as pd
-
         pilot_log = pd.read_csv(pilot_log_path)
         make_label_delay_timeline(pilot_log, StreamConfig(), FIGURE_DIR / "label_delay_timeline.png")
     else:
         print("skipping label-delay timeline: results/pilot/per_window_log.csv.gz not found, run the pilot first")
 
+    main_log_path = Path("results/per_window_log.csv.gz")
+    summary_path = Path("results/summary.json")
+    if main_log_path.exists() and summary_path.exists():
+        main_log = pd.read_csv(main_log_path)
+        with open(summary_path) as f:
+            summary = json.load(f)
+
+        make_performance_over_time(main_log, "S1", "moderate", FIGURE_DIR / "performance_over_time_s1_moderate.png")
+        make_detection_delay_vs_severity(summary, FIGURE_DIR / "detection_delay_vs_severity.png")
+        scenarios = sorted(main_log["scenario"].unique())
+        make_retrain_vs_recall(summary, scenarios, FIGURE_DIR / "retrain_vs_recall.png")
+        make_ablation_bars(summary, "S1", "moderate", FIGURE_DIR / "ablation_bars.png")
+        make_false_alarm_rates(summary, FIGURE_DIR / "false_alarm_rates.png")
+        make_s4_failure_figure(main_log, FIGURE_DIR / "s4_failure.png")
+    else:
+        print("skipping main-run figures: results/per_window_log.csv.gz / summary.json not found, run configs/main.yaml first")
+
     print("figures written to", FIGURE_DIR)
-    print("remaining data-dependent figures (performance over time, detection delay vs severity, "
-          "retrain vs recall, ablation bars, false alarm rates, S4 failure, sensitivity, scale-up) "
-          "are built once the main run and profiling exist; see telltale/figures.py")
 
 
 def _not_implemented(name: str):

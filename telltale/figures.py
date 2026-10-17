@@ -100,6 +100,146 @@ def make_drift_taxonomy(out_path: Path) -> None:
     print(f"wrote {out_path}")
 
 
+def make_performance_over_time(window_log: pd.DataFrame, scenario: str, severity: str, out_path: Path) -> None:
+    g = window_log[(window_log["scenario"] == scenario) & (window_log["severity"] == severity)]
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for strategy, gg in g.groupby("strategy"):
+        mean_by_t = gg.groupby("t")["ap"].mean()
+        ax.plot(mean_by_t.index, mean_by_t.values, label=strategy, lw=1.3)
+
+    m1 = g[g["strategy"] == "M1"]
+    for t in m1[m1["alarm_label_free"]]["t"].unique():
+        ax.axvline(t, color="orange", alpha=0.15, linestyle="--")
+    for t in m1[m1["retrain_executed"]]["t"].unique():
+        ax.axvline(t, color="green", alpha=0.2, linestyle="-")
+
+    ax.set_xlabel("window")
+    ax.set_ylabel("average precision (mean over seeds)")
+    ax.set_title(f"Performance over time, {scenario} {severity} (M1 alarms=orange, retrains=green)")
+    ax.legend(fontsize=8, ncol=4)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    print(f"wrote {out_path}")
+
+
+def make_detection_delay_vs_severity(summary: dict, out_path: Path) -> None:
+    severities = ["mild", "moderate", "severe"]
+    strategies = ["M0", "M1"]
+    fig, ax = plt.subplots(figsize=(7, 5))
+    for strategy in strategies:
+        delays = []
+        for sev in severities:
+            key = f"S1|{sev}|{strategy}"
+            d = summary["detection"].get(key, {}).get("label_free_delay_median")
+            delays.append(d if d is not None else float("nan"))
+        ax.plot(severities, delays, marker="o", label=strategy)
+    ax.set_xlabel("S1 severity")
+    ax.set_ylabel("median label-free detection delay (windows)")
+    ax.set_title("Detection delay versus drift severity")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    print(f"wrote {out_path}")
+
+
+def make_retrain_vs_recall(summary: dict, scenarios: list, out_path: Path) -> None:
+    fig, ax = plt.subplots(figsize=(7, 6))
+    strategies = ["B0", "B1", "B2", "B3", "M0", "M1", "M1a", "M1b"]
+    for strategy in strategies:
+        xs, ys = [], []
+        for scenario in scenarios:
+            severity = "moderate"
+            key = f"{scenario}|{severity}|{strategy}"
+            g = summary["groups"].get(key)
+            if g:
+                xs.append(g["retrain_count_mean"])
+                ys.append(g["time_averaged_recall_mean"])
+        if xs:
+            ax.scatter(xs, ys, label=strategy, s=40)
+    ax.set_xlabel("mean retrain count")
+    ax.set_ylabel("mean time-averaged recall at budget")
+    ax.set_title("Cost versus performance, averaged over scenarios")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    print(f"wrote {out_path}")
+
+
+def make_ablation_bars(summary: dict, scenario: str, severity: str, out_path: Path) -> None:
+    strategies = ["M1a", "M1b", "M1"]
+    labels = ["input-only", "score-only", "combined"]
+    delays, fas = [], []
+    for strategy in strategies:
+        dkey = f"{scenario}|{severity}|{strategy}"
+        delays.append(summary["detection"].get(dkey, {}).get("label_free_delay_median") or 0)
+        fas.append(summary["false_alarms"].get(dkey, {}).get("rate_per_100") or 0)
+
+    fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+    axes[0].bar(labels, delays, color="#4c72b0")
+    axes[0].set_ylabel("median detection delay (windows)")
+    axes[0].set_title(f"Detection delay, {scenario} {severity}")
+    axes[1].bar(labels, fas, color="#dd8452")
+    axes[1].set_ylabel("false alarms per 100 windows")
+    axes[1].set_title("False alarm rate (S0/S6 average)")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    print(f"wrote {out_path}")
+
+
+def make_false_alarm_rates(summary: dict, out_path: Path) -> None:
+    strategies = ["M0", "M1", "M1a", "M1b", "B3"]
+    s0_rates, s6_rates = [], []
+    for strategy in strategies:
+        s0_rates.append(summary["false_alarms"].get(f"S0|moderate|{strategy}", {}).get("rate_per_100") or 0)
+        s6_rates.append(summary["false_alarms"].get(f"S6|moderate|{strategy}", {}).get("rate_per_100") or 0)
+
+    x = np.arange(len(strategies))
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar(x - 0.2, s0_rates, width=0.4, label="S0")
+    ax.bar(x + 0.2, s6_rates, width=0.4, label="S6")
+    ax.axhline(1.0, color="red", linestyle="--", lw=1, label="PRD target (1/100)")
+    ax.set_xticks(x)
+    ax.set_xticklabels(strategies)
+    ax.set_ylabel("alarms per 100 windows")
+    ax.set_title("False alarm rate, no-drift scenarios")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    print(f"wrote {out_path}")
+
+
+def make_s4_failure_figure(window_log: pd.DataFrame, out_path: Path) -> None:
+    g = window_log[(window_log["scenario"] == "S4") & (window_log["strategy"].isin(["M1", "B3"]))]
+    fig, axes = plt.subplots(2, 1, figsize=(10, 7), sharex=True)
+
+    for strategy, gg in g.groupby("strategy"):
+        mean_by_t = gg.groupby("t")["ap"].mean()
+        axes[0].plot(mean_by_t.index, mean_by_t.values, label=strategy)
+    axes[0].axvline(60, color="black", linestyle="--", alpha=0.6, label="true onset")
+    axes[0].set_ylabel("average precision")
+    axes[0].legend()
+    axes[0].set_title("S4 (pure concept drift): performance collapses while label-free evidence stays flat")
+
+    m1 = g[g["strategy"] == "M1"]
+    mean_ev = m1.groupby("t")["combined_evidence"].mean()
+    axes[1].plot(mean_ev.index, mean_ev.values, color="purple", label="M1 combined evidence")
+    axes[1].axhline(1.0, color="gray", linestyle=":", label="edge of normal")
+    axes[1].axvline(60, color="black", linestyle="--", alpha=0.6)
+    axes[1].set_xlabel("window")
+    axes[1].set_ylabel("label-free evidence")
+    axes[1].legend()
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    print(f"wrote {out_path}")
+
+
 def make_label_delay_timeline(pilot_log: pd.DataFrame, cfg: StreamConfig, out_path: Path) -> None:
     m1 = pilot_log[(pilot_log["scenario"] == "S1") & (pilot_log["strategy"] == "M1") & (pilot_log["seed"] == 0)]
     m1 = m1.sort_values("t")
