@@ -239,6 +239,33 @@ def _make_pilot_figure(window_log, out_dir: Path) -> None:
     print(f"wrote {out_path}")
 
 
+def cmd_profile(_args: argparse.Namespace) -> None:
+    from dataclasses import asdict
+
+    from telltale.profiling import run_profile
+
+    result = run_profile()
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = RESULTS_DIR / "profiling.json"
+    with open(out_path, "w") as f:
+        json.dump(asdict(result), f, indent=2)
+    print(f"wrote {out_path}")
+
+    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(result.window_sizes, [s * 1000 for s in result.monitor_seconds_per_window], marker="o")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("transactions per window")
+    ax.set_ylabel("monitor time (ms)")
+    ax.set_title("Scale-up: monitor runtime versus window size")
+    fig.tight_layout()
+    fig_path = FIGURE_DIR / "scale_up_runtime.png"
+    fig.savefig(fig_path, dpi=120)
+    plt.close(fig)
+    print(f"wrote {fig_path}")
+
+
 def _not_implemented(name: str):
     def _run(_args: argparse.Namespace) -> None:
         print(f"telltale.cli {name}: not implemented yet (see PRD.md Section 12 for the build plan)")
@@ -258,7 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--config", required=True)
     run_parser.set_defaults(func=cmd_run)
 
-    sub.add_parser("profile").set_defaults(func=_not_implemented("profile"))
+    sub.add_parser("profile").set_defaults(func=cmd_profile)
     sub.add_parser("make-figures").set_defaults(func=_not_implemented("make-figures"))
     sub.add_parser("real-check").set_defaults(func=_not_implemented("real-check"))
 
