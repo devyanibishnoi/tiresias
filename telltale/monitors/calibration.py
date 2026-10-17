@@ -31,6 +31,28 @@ def bootstrap_index_matrix(pool_size: int, window_n: int, n_draws: int, rng: np.
     return rng.integers(0, pool_size, size=(n_draws, window_n))
 
 
+def bootstrap_window_index_matrix(pool_size: int, window_n: int, n_draws: int, rng: np.random.Generator) -> np.ndarray:
+    """Draw whole reference windows (PRD 6.2: "drawing windows of size N
+    from the reference"), not individually shuffled rows, then resample rows
+    within the chosen window with replacement.
+
+    Picking a window and returning it byte-for-byte would cap the null
+    distribution at as many distinct outcomes as there are reference windows
+    (only 10, the calibration windows 20-29), which badly understates the
+    99th percentile: a verbatim historical window can never be more extreme
+    than the most extreme window already on hand, but a genuinely new window
+    drawn from the same distribution can, and routinely did in testing (a
+    fresh S0 window exceeded the resulting threshold about 60 percent of the
+    time instead of about 1 percent, see docs/dev_log.md). Resampling rows
+    within the chosen window keeps the shared within-window structure a pure
+    row-level bootstrap washes out (S6's seasonal phase, PRD 6.2's wording)
+    while still giving the null genuine tail variability."""
+    n_windows = pool_size // window_n
+    chosen = rng.integers(0, n_windows, size=n_draws)
+    within_window_offsets = rng.integers(0, window_n, size=(n_draws, window_n))
+    return chosen[:, None] * window_n + within_window_offsets
+
+
 def psi_null_draws(pool_values: np.ndarray, idx_matrix: np.ndarray, n_bins: int = 10) -> np.ndarray:
     """Null PSI draws for one continuous signal, against the pool itself."""
     edges = bin_edges(pool_values, n_bins)

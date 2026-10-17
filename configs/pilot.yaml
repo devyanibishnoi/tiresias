@@ -1,0 +1,9 @@
+# Pilot config (PRD Section 9 item 1, Section 12 Phase 4). Quick and rough on purpose: feeds
+# report Section 11 ("Early Simulation Output"). Consumed by
+# `python -m telltale.cli run --config configs/pilot.yaml`.
+
+name: pilot
+scenarios: [S0, S1]
+s1_severity: moderate
+seeds: [0, 1, 2, 3, 4]
+strategies: [B0, B1, M1]

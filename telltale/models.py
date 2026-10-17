@@ -79,12 +79,16 @@ class Retrainer:
         self.random_state = random_state
         self._retrain_count = 0
 
-    def fit(self, X_recent: np.ndarray, y_recent: np.ndarray, window_ids_recent: np.ndarray) -> RetrainResult:
-        """Refit the deployed model on the W most recent matured windows and
-        compute out-of-fold scores on the same block, honest material for a
-        new reference (never the retrained model's own in-sample scores)."""
+    def fit(self, X_recent: np.ndarray, y_recent: np.ndarray, window_ids_recent: np.ndarray, need_oof: bool = True) -> RetrainResult:
+        """Refit the deployed model on the W most recent matured windows and,
+        if need_oof, compute out-of-fold scores on the same block (honest
+        material for a new monitor reference, never the retrained model's
+        own in-sample scores). Strategies with no label-free monitor and no
+        backstop (B1, B2) never build a reference, so need_oof=False skips
+        the 5 extra cross-validation fits that result would otherwise go
+        unused: measured as the dominant cost of a fixed-schedule retrain."""
         seed = self.random_state + self._retrain_count
         model = fit_model(X_recent, y_recent, random_state=seed)
-        oof = out_of_fold_scores(X_recent, y_recent, window_ids_recent, random_state=seed)
+        oof = out_of_fold_scores(X_recent, y_recent, window_ids_recent, random_state=seed) if need_oof else None
         self._retrain_count += 1
         return RetrainResult(model=model, X=X_recent, oof_scores=oof, window_ids=window_ids_recent)

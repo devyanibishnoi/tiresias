@@ -41,3 +41,43 @@ report's Challenges Faced section.
   M0, M1, M1a, M1b) run end to end and agree with the PRD's retrain-timing rules (label-free alarms
   defer to t+D+m, backstop retrains immediately, fixed schedule and oracle trigger correctly). 38
   tests pass.
+- Phase 3 tuning first attempt failed completely: grid search over a wide (slack, height) range
+  found zero parameter combinations keeping the false alarm rate at or below 1 per 100 windows on
+  S0 and S6. Diagnosed by printing the mean combined evidence under null: S0 was a sane 0.9 to
+  0.92, but S6 was 3.1 to 3.4, meaning the "benign seasonality" scenario was setting off the input
+  or score monitor almost constantly. Root cause was the null calibration's bootstrap resampling
+  (see docs/decisions.md): it drew individual rows instead of whole windows, so it never saw a
+  synthetic "window" with S6's shared per-window seasonal phase, only diluted mixes of many
+  phases. Fixed by resampling whole reference windows. After the fix, S0 and S6 both settled to a
+  mean evidence around 1.0 to 1.1, and tuning succeeded on the first proper grid search: slack
+  1.8, height 2.5 for the combined/input/score CUSUM, slack 2.4, height 1.5 for the backstop, both
+  at 0.17 false alarms per 100 windows.
+- A side effect of the bad tuning run (before the fix was found) was a projected 26+ hour main
+  experiment, since the unusable parameter combinations the grid search WAS forced to accept
+  (tried at a much higher height to suppress S6's false floor) would have meant very large CUSUM
+  heights and correspondingly more retrains triggered by noise. With the fix, the same
+  `test_policy_timing.py` suite that took 341 seconds with the untuned placeholder parameters
+  (slack 0.5, height 3.0) now takes 57 seconds with the properly tuned ones, because far fewer
+  spurious retrains fire.
+- A dedicated null-calibration check (does a fresh S0 window actually exceed its own 99th
+  percentile threshold about 1 percent of the time) caught a second calibration bug after the
+  whole-window bootstrap fix: resampling whole reference windows verbatim can only produce 10
+  distinct outcomes (there are only 10 calibration windows), so the resulting 99th percentile was
+  capped near the single most unusual window already on hand and a fresh window exceeded it 60
+  percent of the time. Fixed by also resampling rows within each chosen window (bootstrap the
+  window choice, then bootstrap that window's rows). Re-ran `python -m telltale.cli tune`
+  afterward: combined CUSUM settled at slack 1.0, height 1.0, measured 0 false alarms per 100
+  windows on both S0 and S6 on the tuning seeds; backstop stayed at slack 2.2, height 1.0. Full
+  test suite (38 tests) now runs in 66 seconds, down from 159 seconds before this fix, because
+  even fewer spurious retrains fire.
+- Timing re-measured end to end after all Phase 2/3 fixes: all 8 P0 strategies on one
+  scenario/seed took about 136 seconds sequentially (down from about 530 seconds before the
+  `class_weight` fix and the OOF-skip-for-B1/B2 optimisation). A controlled CPU-bound benchmark
+  showed this sandboxed shell only gets genuine parallelism across about 2 real cores despite
+  `os.cpu_count()` reporting 12, so `telltale/experiments.py` uses a small worker pool
+  (`DEFAULT_MAX_WORKERS = 3`) rather than assuming full-core scaling. Projected the full 20-seed
+  main experiment at roughly 3 to 3.5 hours; discussed with the author and cut evaluation seeds to
+  10 (PRD Section 3 cut list item 1), projected at roughly 1.5 to 1.75 hours. `telltale/config.py`
+  and `configs/main.yaml` updated accordingly.
+- `docs/first_pass_prediction.md` (10 to 12 numeric predictions with ranges and reasoning) written
+  and committed before the pilot or main run, per PRD Section 10.2. Phase 3 is done.

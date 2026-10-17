@@ -37,16 +37,25 @@ class SimulationResult:
     events: list = field(default_factory=list)
 
 
+# Tuned on the tuning seeds (100-104) against the false alarm target of PRD
+# 6.5 (at most 1 per 100 windows on S0 and S6); see docs/decisions.md and
+# docs/first_pass_prediction.md. Reused unchanged for M0, M1, M1a and M1b.
+TUNED_CUSUM_SLACK = 1.0
+TUNED_CUSUM_HEIGHT = 1.0
+TUNED_BACKSTOP_SLACK = 2.2
+TUNED_BACKSTOP_HEIGHT = 1.0
+
+
 def simulate(
     scenario: str,
     seed: int,
     strategy_name: str,
     severity: str = "moderate",
     cfg: StreamConfig | None = None,
-    cusum_slack: float = 0.5,
-    cusum_height: float = 3.0,
-    backstop_slack: float = 0.5,
-    backstop_height: float = 3.0,
+    cusum_slack: float = TUNED_CUSUM_SLACK,
+    cusum_height: float = TUNED_CUSUM_HEIGHT,
+    backstop_slack: float = TUNED_BACKSTOP_SLACK,
+    backstop_height: float = TUNED_BACKSTOP_HEIGHT,
     model_seed: int = 0,
 ) -> SimulationResult:
     cfg = cfg or StreamConfig()
@@ -159,7 +168,7 @@ def simulate(
                 X_recent = stream.X[recent].reshape(-1, cfg.d)
                 y_recent = stream.y[recent].reshape(-1)
                 window_ids_recent = np.repeat(np.array(recent), cfg.N)
-                result = retrainer.fit(X_recent, y_recent, window_ids_recent)
+                result = retrainer.fit(X_recent, y_recent, window_ids_recent, need_oof=needs_monitor)
                 model = result.model
                 retrain_count += 1
                 retrain_times.append((t, pending_source))

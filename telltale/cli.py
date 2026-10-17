@@ -8,6 +8,7 @@ and exits non-zero rather than pretending to succeed.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -15,12 +16,18 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import numpy as np
+import numpy as np  # noqa: F401 (used below and by cmd_tune's grid)
 
 from telltale.config import FEATURE_NAMES, StreamConfig
 from telltale.data.events_io import save_events
 from telltale.data.injector import VALID_SCENARIOS, scenario_events
 from telltale.data.stream import generate_stream
+from telltale.metrics import recall_at_budget
+from telltale.models import fit_model
+from telltale.monitors.backstop import backstop_evidence, calibrate_backstop
+from telltale.tuning import compute_evidence_stream, false_alarm_rate_per_100, grid_search
+
+RESULTS_DIR = Path("results")
 
 SAMPLE_SEED = 0
 SAMPLE_DIR = Path("data/sim_samples")
@@ -101,6 +108,79 @@ def _plot_marginals_check(cfg: StreamConfig) -> None:
     print(f"wrote {out_path}")
 
 
+def _backstop_null_stream(scenario: str, seed: int, cfg: StreamConfig):
+    stream = generate_stream(scenario, seed, cfg=cfg)
+    Xtr = stream.X[cfg.train_start : cfg.train_end + 1].reshape(-1, cfg.d)
+    ytr = stream.y[cfg.train_start : cfg.train_end + 1].reshape(-1)
+    model = fit_model(Xtr, ytr, random_state=0)
+
+    calib_recalls = [
+        recall_at_budget(stream.y[w], model.predict_proba(stream.X[w])[:, 1])
+        for w in range(cfg.ref_start, cfg.ref_end + 1)
+    ]
+    calib = calibrate_backstop(calib_recalls)
+
+    evs = []
+    for w in range(cfg.eval_start, cfg.T):
+        recall_w = recall_at_budget(stream.y[w], model.predict_proba(stream.X[w])[:, 1])
+        evs.append(backstop_evidence(recall_w, calib))
+    return np.array(evs)
+
+
+def cmd_tune(_args: argparse.Namespace) -> None:
+    cfg = StreamConfig()
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    print("computing null evidence streams on tuning seeds (S0, S6)...")
+    combined_arrays, input_arrays, score_arrays, backstop_arrays = [], [], [], []
+    for scenario in ["S0", "S6"]:
+        for seed in cfg.tuning_seeds:
+            es = compute_evidence_stream(scenario, seed, cfg=cfg)
+            combined_arrays.append(es.combined_evidence)
+            input_arrays.append(es.input_evidence)
+            score_arrays.append(es.score_evidence)
+            backstop_arrays.append(_backstop_null_stream(scenario, seed, cfg))
+
+    slack_grid = [round(x, 2) for x in np.arange(0.2, 3.01, 0.2)]
+    height_grid = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20]
+
+    # PRD 6.5's hard requirement is at most 1 per 100 windows; target half of
+    # that here so the choice has a safety margin on the evaluation seeds,
+    # which the tuning seeds never see.
+    safety_target = 0.5
+    combined_valid = grid_search(combined_arrays, slack_grid, height_grid, target_fa_per_100=safety_target)
+    backstop_valid = grid_search(backstop_arrays, slack_grid, height_grid, target_fa_per_100=safety_target)
+
+    if not combined_valid or not backstop_valid:
+        print("no valid (slack, height) found meeting the 1-per-100 false alarm target")
+        sys.exit(1)
+
+    chosen_combined = combined_valid[0]
+    chosen_backstop = backstop_valid[0]
+
+    result = {
+        "combined_cusum": chosen_combined,
+        "backstop_cusum": chosen_backstop,
+        "input_only_false_alarm_per_100": false_alarm_rate_per_100(
+            input_arrays, chosen_combined["slack"], chosen_combined["height"]
+        ),
+        "score_only_false_alarm_per_100": false_alarm_rate_per_100(
+            score_arrays, chosen_combined["slack"], chosen_combined["height"]
+        ),
+        "tuning_seeds": list(cfg.tuning_seeds),
+    }
+
+    out_path = RESULTS_DIR / "tuning.json"
+    with open(out_path, "w") as f:
+        json.dump(result, f, indent=2)
+    print(f"wrote {out_path}")
+    print(json.dumps(result, indent=2))
+    print(
+        "\nUpdate telltale/simulator.py's TUNED_CUSUM_* / TUNED_BACKSTOP_* constants "
+        "if these differ from what is currently hardcoded there."
+    )
+
+
 def _not_implemented(name: str):
     def _run(_args: argparse.Namespace) -> None:
         print(f"telltale.cli {name}: not implemented yet (see PRD.md Section 12 for the build plan)")
@@ -114,7 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("generate-samples").set_defaults(func=cmd_generate_samples)
-    sub.add_parser("tune").set_defaults(func=_not_implemented("tune"))
+    sub.add_parser("tune").set_defaults(func=cmd_tune)
 
     run_parser = sub.add_parser("run")
     run_parser.add_argument("--config", required=True)

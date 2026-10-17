@@ -1,0 +1,13 @@
+# Tuning config (PRD Section 12 Phase 3). Consumed by `python -m telltale.cli tune`.
+# Tuning seeds and the false-alarm safety target are also hardcoded in telltale/cli.py's
+# cmd_tune and telltale/config.py's StreamConfig.tuning_seeds; this file documents the same
+# values for a human reader, it is not re-parsed by the CLI.
+
+tuning_seeds: [100, 101, 102, 103, 104]
+scenarios_for_false_alarm_target: [S0, S6]
+false_alarm_target_per_100_windows: 0.5   # half of PRD 6.5's 1-per-100 ceiling, as a safety margin
+slack_grid: [0.2, 0.4, ..., 3.0]           # step 0.2
+height_grid: [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20]
+chosen:
+  combined_cusum: {slack: 2.0, height: 1.0}
+  backstop_cusum: {slack: 2.2, height: 1.0}

@@ -1,0 +1,33 @@
+# First-pass performance prediction
+
+Written after the tuning seeds (100-104) were used to calibrate the CUSUM parameters and the
+generator, and before the pilot or main run of `configs/main.yaml`. Numbers below come from the
+tuning-seed exploration recorded in `docs/decisions.md` and from the analytical model in
+`docs/analytical_model.md`. This file is committed before the first run of the main config and is
+not edited afterward; Section 14.1 of the report compares these predictions against what the main
+run actually measured.
+
+| # | Quantity | Predicted range | Reasoning |
+|---|---|---|---|
+| 1 | Median label-free detection delay, S1 sudden covariate drift, all three severities | 0 to 1 windows | The CUSUM height (1.0) is small relative to the evidence jump observed at onset on every tuning seed (input and score evidence both exceed 3x the height in the very first post-onset window at every severity), so the accumulated sum crosses the height within the same window the drift starts. A1's h/mu + 1 formula is conservative here because mu for a sudden jump this large already exceeds h on its own. |
+| 2 | False alarm rate on S0 (no-drift control) | 0 to 1 per 100 windows | The CUSUM was tuned on the tuning seeds against a target of 0.5 per 100 (half of PRD 6.5's 1-per-100 ceiling, for a safety margin on seeds the tuning never saw) and measured exactly 0 per 100 there. Evaluation seeds the tuning never saw may show a nonzero but still small rate; PRD 6.5's actual requirement (1 per 100) is the number that must hold, not the tuning-seed value of 0. |
+| 3 | False alarm rate on S6 (benign seasonality) | 0 to 1 per 100 windows | Same tuned parameters and reasoning as S0. This was the harder case twice over: a row-level bootstrap null calibration first gave S6 a mean evidence of about 3.2 (see docs/dev_log.md) that no parameter setting could bring under target; fixing that to a whole-window bootstrap then uncovered a second bug (a verbatim-window bootstrap can only produce as many distinct outcomes as there are reference windows, 10, which understated the true tail and let fresh S0 windows exceed threshold 60 percent of the time instead of about 1 percent). Both are fixed by resampling rows within each chosen window too. |
+| 4 | Retrain count, B1 (fixed schedule, K=20) over 120 evaluation windows | Exactly 6 | Deterministic: first scheduled retrain at window 40 (train_end + 1 + K), then every 20 windows through window 140, all within the 120-window evaluation period (30 to 149). Not really a prediction, a direct consequence of the schedule. |
+| 5 | Retrain count, M1, S1 severe | 2 to 4 | On the tuning-seed exploration (which used an earlier, more conservative CUSUM setting), M1 retrained 3 times on one S1-severe tuning run: once for the single true onset event (plus deferred wait) and at most 1 to 2 more from the backstop or an occasional false alarm. This should land at or under 60 percent of B1's 6 retrains (H3's target), i.e. at or under 3 to 4. |
+| 6 | Label-free detection on S4 (pure concept drift) | Fails to detect in the large majority of runs | By construction S4 only swaps which features generate the label; every feature's marginal distribution is unchanged (checked near-null PSI in the Phase 1 generator tests), so the input and score monitors have no signal to react to. On the 5 tuning seeds, the label-free monitor correctly stayed silent on 4 of 5; the one alarm that did fire is consistent with the calibrated 0.5-per-100 false alarm rate accumulated over about 90 post-onset windows, not a real detection. This is the expected negative result PRD 2.2 and H4 call for. |
+| 7 | Backstop detection delay on S4 | D to D + 3 windows (about 7 to 10) | The backstop can only act once a window's labels mature, so it cannot possibly beat D = 7 windows. On the tuning-seed exploration, the backstop's own evidence already exceeded its height using just the first matured post-onset window, so the predicted total delay is D plus a small handful of windows for the CUSUM to register, comfortably inside H4's D + 5 (12-window) requirement. |
+| 8 | Early-warning lead time (backstop alarm window minus label-free alarm window), S1 moderate | About D windows (6 to 9) | Label-free detects within 0 to 1 windows of onset (prediction 1), while the backstop structurally cannot act before D = 7 windows after onset, plus a small accumulation delay. The difference is therefore close to D itself. |
+| 9 | Gap closed (time-averaged recall at budget), M1 vs the B0-to-B2 range, S1 moderate and severe | 0.6 to 0.9 | M1 retrains close to the true event (predictions 1 and 8) and close to the oracle's own D + m timing, so it should recover most, but not necessarily all, of the gap between never retraining (B0) and the oracle (B2); some gap remains because the retrain itself needs W = 20 matured windows and the deferred-retrain wait (D + m) before a corrected model is deployed. |
+| 10 | Monitor time per window | Well under the 100 ms target (PR6) | Measured directly during development (not from a formal profiling run yet): about 10 ms per monitored window after precomputing reference bin edges once per reference instead of per window (see docs/decisions.md, docs/dev_log.md). A 10x margin below the 100 ms requirement is expected to hold in the formal `telltale.cli profile` run. |
+| 11 | Seconds per retrain, strategies that need a monitor reference (M0, M1, M1a, M1b, B3) | 5 to 12 seconds | Each such retrain fits 6 models (1 deployed model plus a 5-fold blocked out-of-fold ensemble for the new reference, PRD 6.6), each fit measured at roughly 1 to 2 seconds on 40,000 rows (W=20 windows x N=2000) after removing the `class_weight="balanced"` performance bug (docs/decisions.md). |
+| 12 | Seconds per retrain, strategies that never need a monitor reference (B1, B2) | 1 to 2 seconds | Only the single deployed model is fit, no out-of-fold ensemble (`Retrainer.fit(..., need_oof=False)`), since B1 and B2 never build a drift-monitor reference. |
+
+## What would change these predictions
+
+If the main run's evaluation seeds behave very differently from the 5 tuning seeds (for example,
+if false alarms cluster on a seed the tuning never saw), the false alarm rate (predictions 2, 3)
+could exceed the half-target margin while still staying under PRD 6.5's full 1-per-100 ceiling.
+Predictions 5 and 9 are the least certain, since they depend on the interaction between the
+deferred-retrain timer and the backstop racing to retrain first, which the tuning-seed exploration
+only checked informally, not with the full statistics (paired Wilcoxon, confidence intervals) the
+main run will produce.

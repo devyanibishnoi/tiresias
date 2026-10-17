@@ -1,0 +1,21 @@
+{
+  "combined_cusum": {
+    "slack": 1.0,
+    "height": 1,
+    "false_alarm_per_100": 0.0
+  },
+  "backstop_cusum": {
+    "slack": 2.2,
+    "height": 1,
+    "false_alarm_per_100": 0.5
+  },
+  "input_only_false_alarm_per_100": 0.0,
+  "score_only_false_alarm_per_100": 0.0,
+  "tuning_seeds": [
+    100,
+    101,
+    102,
+    103,
+    104
+  ]
+}

@@ -20,7 +20,10 @@ class StreamConfig:
     maturity_wait: int = 3
     fixed_schedule_K: int = 20
     tuning_seeds: tuple = tuple(range(100, 105))
-    eval_seeds: tuple = tuple(range(0, 20))
+    # PRD 5.1 default is 20 (range(0, 20)); cut to 10 per PRD's own cut list
+    # (Section 3) for wall-clock feasibility on this machine's effective
+    # parallelism. See docs/decisions.md.
+    eval_seeds: tuple = tuple(range(0, 10))
 
 
 # Features 0-13: continuous. 14-15: skewed positive (amount-like).

@@ -23,7 +23,7 @@ import numpy as np
 from telltale.monitors.calibration import (
     N_NULL_DRAWS,
     SignalThresholds,
-    bootstrap_index_matrix,
+    bootstrap_window_index_matrix,
     psi_null_draws,
     ratio_null_draws,
     threshold_from_null,
@@ -76,7 +76,7 @@ def build_reference(
     )
 
     pool_size = len(scores)
-    idx_matrix = bootstrap_index_matrix(pool_size, window_n, n_draws, rng)
+    idx_matrix = bootstrap_window_index_matrix(pool_size, window_n, n_draws, rng)
 
     log_odds_scores = log_odds(scores)
     entropy_pool = predictive_entropy(scores)

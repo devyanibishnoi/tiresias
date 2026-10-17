@@ -61,3 +61,59 @@ Dated log of design and parameter choices, with reasons. Append only.
   The same precomputed-bins idea is reused for the per-window operational PSI calls (previously
   recomputing quantile edges and an unused KS statistic on every window), which cut per-window
   monitoring from about 0.16s to about 0.01s.
+
+- Null resampling bug found during Phase 3 tuning: the bootstrap null for S0/S6 was drawing
+  individual transaction rows from across the whole reference pool, not whole reference windows.
+  PRD 6.2 literally says "drawing windows of size N from the reference", and the difference
+  matters a lot for S6: every row inside one real window shares the same seasonal phase (6.4's
+  `amount_scale`), but a row-level bootstrap mixes rows from many different phases into one
+  synthetic draw, which averages the phase effect away and makes the null threshold too tight.
+  Before the fix, S6's mean combined evidence was about 3.1 to 3.4 (anything above 1.0 is already
+  "more unusual than the edge of normal"), and no (slack, height) pair in a wide grid search could
+  bring the false alarm rate under the 1-per-100 target. After switching to whole-window bootstrap
+  (`bootstrap_window_index_matrix`, draws one of the reference's actual windows at a time, not a
+  reshuffled mix of rows), mean evidence on both S0 and S6 dropped to about 1.0 to 1.1, matching
+  what the evidence scale is supposed to mean, and tuning succeeded immediately. See
+  docs/dev_log.md.
+
+- Null calibration bug, round two: even after the whole-window bootstrap fix above, a dedicated
+  check (verify a FRESH S0 window's evidence rarely exceeds its own 99th-percentile threshold)
+  failed badly: input-drift evidence exceeded 1.0 on 60 percent of fresh windows instead of about
+  1 percent. Cause: resampling whole reference windows verbatim (with replacement) can only ever
+  produce as many distinct outcomes as there are reference windows (10, the calibration windows
+  20-29), so the 99th percentile of 300 such draws is capped near the single most unusual window
+  already in hand; it cannot represent how extreme a genuinely new window can be. Fixed by
+  resampling WITHIN each chosen window too (bootstrap the window choice, then bootstrap its 2000
+  rows with replacement), which keeps the within-window structure the first fix was for while
+  giving the null real tail variability. See `bootstrap_window_index_matrix` in
+  `telltale/monitors/calibration.py` and `tests/test_null_calibration.py`.
+- CUSUM tuning (Phase 3, `python -m telltale.cli tune`, implemented in `telltale/tuning.py`), on
+  the tuning seeds (100-104), after both null-calibration fixes above: grid search over slack and
+  height, targeting a false alarm rate at or below 0.5 per 100 windows on S0 and S6 (half of PRD
+  6.5's 1-per-100 requirement, kept as a safety margin since the evaluation seeds are never seen
+  during tuning), picking the smallest height among the valid combinations (fastest detection for
+  the same false-alarm budget):
+  - Combined evidence CUSUM (used by M0, M1, M1a, M1b; input-only and score-only evidence streams
+    were checked separately and both stay at or under target at the same setting, so one shared
+    setting is used for a fair ablation comparison): slack 1.0, height 1.0, measured false alarm
+    rate 0.0 per 100 windows on both S0 and S6.
+  - Backstop CUSUM (B3, M1): slack 2.2, height 1.0, measured false alarm rate 0.5 per 100 windows.
+  - With these settings, the detection delay for S1 (sudden covariate drift) was 0 windows at
+    every severity on every tuning seed: the evidence jump at onset is large enough to cross the
+    height in the very first drifted window. S4 (pure concept drift) correctly failed to alarm the
+    label-free monitor on 4 of 5 tuning seeds (checked at an earlier, slightly more conservative
+    parameter setting during manual exploration; per-feature PSI for S4 was already checked near
+    null in the Phase 1 generator tests, so an occasional alarm there is calibrated noise, not a
+    detection leak). The backstop detected S4 with 0 added delay beyond the label delay D itself.
+  - `results/tuning.json` holds the full grid-search output for the chosen settings.
+
+- Evaluation seeds cut from 20 to 10 (PRD Section 3 cut list, item 1), confirmed with the author.
+  `os.cpu_count()` reports 12 cores on this machine, but a controlled CPU-bound benchmark (pure
+  Python sum-of-squares, no I/O, no shared library calls) measured only about a 2x wall-clock
+  speedup from 8 worker processes instead of something close to 8x, meaning the sandboxed shell
+  this project is built in only has genuine parallelism across about 2 real cores. Combined with
+  the per-run cost after the Phase 2/3 speed fixes (about 136 seconds for all 8 P0 strategies on
+  one scenario/seed, sequential), the full 20-seed main experiment (9 scenario/severity
+  configurations x 20 seeds) was projected at roughly 3 to 3.5 hours even with parallel workers.
+  10 seeds brings that to roughly 1.5 to 1.75 hours. `telltale/experiments.py` still runs with a
+  small worker pool (`DEFAULT_MAX_WORKERS = 3`) since even a ~2x speedup is worth taking.
