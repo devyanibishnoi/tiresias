@@ -22,6 +22,13 @@
         "2": 0,
         "3": 0,
         "4": 0
+      },
+      "time_averaged_recall_per_seed": {
+        "0": 0.5711801346128756,
+        "1": 0.566322851026332,
+        "2": 0.5916878890366094,
+        "3": 0.5849199344561123,
+        "4": 0.5786425551738038
       }
     },
     "S0|moderate|B1": {
@@ -46,6 +53,13 @@
         "2": 6,
         "3": 6,
         "4": 6
+      },
+      "time_averaged_recall_per_seed": {
+        "0": 0.5740534465832171,
+        "1": 0.5749068228588439,
+        "2": 0.5890904820558309,
+        "3": 0.5960030563720855,
+        "4": 0.5746661095794344
       }
     },
     "S0|moderate|M1": {
@@ -70,6 +84,13 @@
         "2": 0,
         "3": 2,
         "4": 0
+      },
+      "time_averaged_recall_per_seed": {
+        "0": 0.5711801346128756,
+        "1": 0.5702290287489973,
+        "2": 0.5916878890366094,
+        "3": 0.5823640475406969,
+        "4": 0.5786425551738038
       }
     },
     "S1|moderate|B0": {
@@ -94,6 +115,13 @@
         "2": 0,
         "3": 0,
         "4": 0
+      },
+      "time_averaged_recall_per_seed": {
+        "0": 0.46935802595763054,
+        "1": 0.4811239180548797,
+        "2": 0.4942693938346902,
+        "3": 0.492912093263459,
+        "4": 0.5027370388796801
       }
     },
     "S1|moderate|B1": {
@@ -118,6 +146,13 @@
         "2": 6,
         "3": 6,
         "4": 6
+      },
+      "time_averaged_recall_per_seed": {
+        "0": 0.5313353016297736,
+        "1": 0.5360790137060684,
+        "2": 0.5362122255931521,
+        "3": 0.5294787872321479,
+        "4": 0.5332305564605433
       }
     },
     "S1|moderate|M1": {
@@ -142,6 +177,13 @@
         "2": 2,
         "3": 3,
         "4": 1
+      },
+      "time_averaged_recall_per_seed": {
+        "0": 0.503937730862352,
+        "1": 0.5215090746312094,
+        "2": 0.5466958049968774,
+        "3": 0.5315340803793609,
+        "4": 0.5268257231384019
       }
     }
   },
@@ -151,35 +193,60 @@
       "label_free_delay_median": null,
       "label_free_delay_values": [],
       "backstop_delay_median": null,
-      "backstop_delay_values": []
+      "backstop_delay_values": [],
+      "delay_by_seed_lf": {},
+      "delay_by_seed_bs": {},
+      "paired_seeds": [],
+      "paired_lf": [],
+      "paired_bs": []
     },
     "S0|moderate|B1": {
       "n_events": 0,
       "label_free_delay_median": null,
       "label_free_delay_values": [],
       "backstop_delay_median": null,
-      "backstop_delay_values": []
+      "backstop_delay_values": [],
+      "delay_by_seed_lf": {},
+      "delay_by_seed_bs": {},
+      "paired_seeds": [],
+      "paired_lf": [],
+      "paired_bs": []
     },
     "S0|moderate|M1": {
       "n_events": 0,
       "label_free_delay_median": null,
       "label_free_delay_values": [],
       "backstop_delay_median": null,
-      "backstop_delay_values": []
+      "backstop_delay_values": [],
+      "delay_by_seed_lf": {},
+      "delay_by_seed_bs": {},
+      "paired_seeds": [],
+      "paired_lf": [],
+      "paired_bs": []
     },
     "S1|moderate|B0": {
       "n_events": 1,
       "label_free_delay_median": null,
       "label_free_delay_values": [],
       "backstop_delay_median": null,
-      "backstop_delay_values": []
+      "backstop_delay_values": [],
+      "delay_by_seed_lf": {},
+      "delay_by_seed_bs": {},
+      "paired_seeds": [],
+      "paired_lf": [],
+      "paired_bs": []
     },
     "S1|moderate|B1": {
       "n_events": 1,
       "label_free_delay_median": null,
       "label_free_delay_values": [],
       "backstop_delay_median": null,
-      "backstop_delay_values": []
+      "backstop_delay_values": [],
+      "delay_by_seed_lf": {},
+      "delay_by_seed_bs": {},
+      "paired_seeds": [],
+      "paired_lf": [],
+      "paired_bs": []
     },
     "S1|moderate|M1": {
       "n_events": 1,
@@ -193,6 +260,37 @@
       ],
       "backstop_delay_median": 8.5,
       "backstop_delay_values": [
+        8,
+        9,
+        7,
+        9
+      ],
+      "delay_by_seed_lf": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "delay_by_seed_bs": {
+        "0": 8,
+        "1": 9,
+        "2": 7,
+        "3": 9
+      },
+      "paired_seeds": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "paired_lf": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "paired_bs": [
         8,
         9,
         7,
