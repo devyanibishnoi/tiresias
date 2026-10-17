@@ -4,13 +4,13 @@ tuning seeds only (100-104), aggregated by mean, never the evaluation seeds.
 
 import numpy as np
 import pytest
-from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import average_precision_score
 
 from telltale.config import StreamConfig
 from telltale.data.events_io import load_events, save_events
 from telltale.data.injector import scenario_events
 from telltale.data.stream import generate_stream
+from telltale.models import fit_model
 from telltale.monitors.stats import psi
 
 CFG = StreamConfig()
@@ -28,8 +28,7 @@ def _fit_model(seed):
     s0 = generate_stream("S0", seed, cfg=CFG)
     Xtr = s0.X[CFG.train_start : CFG.train_end + 1].reshape(-1, CFG.d)
     ytr = s0.y[CFG.train_start : CFG.train_end + 1].reshape(-1)
-    model = HistGradientBoostingClassifier(max_iter=150, class_weight="balanced")
-    model.fit(Xtr, ytr)
+    model = fit_model(Xtr, ytr, random_state=0)
     return model, s0
 
 

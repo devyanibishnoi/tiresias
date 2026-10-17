@@ -44,8 +44,8 @@ FEATURE_NAMES = (
 # the label changes.
 INFORMATIVE_SET_A = [0, 1, 2, 3, 4, 5]
 INFORMATIVE_SET_B = [6, 7, 8, 9, 10, 11]
-WEIGHTS_A = [2.85, -2.5, 2.2, 1.9, -1.6, 1.6]
-WEIGHTS_B = [2.7, -2.4, 2.05, -1.9, 1.75, -1.6]
+WEIGHTS_A = [3.1, -2.7, 2.4, 2.05, -1.75, 1.75]
+WEIGHTS_B = [2.95, -2.6, 2.25, -2.05, 1.9, -1.75]
 
 # Features whose marginal is shifted by covariate-drift scenarios (S1, S2, S3).
 # The per-feature direction is chosen so that the shift is zero-sum against

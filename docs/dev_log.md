@@ -23,3 +23,21 @@ report's Challenges Faced section.
   300-row-per-window subsample (about 165 KB per scenario).
 - Generator acceptance tests (PRD 5.3) all pass on the 5 tuning seeds (100-104); see
   `tests/test_generator.py` and `tests/test_injector.py`. Phase 1 is done.
+- Phase 2 build (simulator, label vault, monitors, backstop, retrain policies) initially
+  calibrated the score monitor's null threshold from a cross-validated ensemble built independently
+  of the deployed model. Pre-drift evidence came out around 50x the alarm threshold, because the
+  deployed model's score distribution never matched the unrelated CV ensemble's, drift or not.
+  Fixed by using the deployed model's own (legitimately out-of-sample) predictions on the
+  calibration windows for the initial reference, reserving the 5-fold blocked out-of-fold
+  procedure for post-retrain reference rebuilds only (PRD 6.6 specifically calls for OOF there,
+  because the retrained model's own training windows would otherwise be scored in-sample).
+- A first end-to-end timing check on one scenario/seed across all 8 strategies projected to about
+  26.6 hours for the full main experiment (1440 scenario/seed/strategy runs), driven by the
+  `class_weight="balanced"` bug above plus an unoptimised null calibration loop, both now fixed
+  (see docs/decisions.md). Still re-measuring the full-scale cost after the fixes before deciding
+  whether seeds need to be cut per PRD's cut list (Section 3).
+- Phase 2 is functionally complete: generator, injector, label vault, monitors (input drift, score
+  drift, calibrator, combiner, backstop, CUSUM), model/retrainer, and all 8 strategies (B0-B3,
+  M0, M1, M1a, M1b) run end to end and agree with the PRD's retrain-timing rules (label-free alarms
+  defer to t+D+m, backstop retrains immediately, fixed schedule and oracle trigger correctly). 38
+  tests pass.
